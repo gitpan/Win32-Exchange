@@ -28,7 +28,7 @@ Win32::OLE->Option('_Unique' => 1);
 #@ISA = qw(Win32::OLE);
 
 my $Version;
-my $VERSION = $Version = "0.041";
+my $VERSION = $Version = "0.041a";
 my $DEBUG = 1;
 
 sub new {
@@ -582,7 +582,7 @@ sub _E2KGetMailbox {
     return 0;
   }
   bless $user_obj,"Win32::OLE";
-  if (_E2KIsMapiAware($dc,$mailbox_alias_name)) {
+  if (!_E2KIsMapiAware($dc,$mailbox_alias_name)) {
     _DebugComment("Error performing GetMailbox: user is not MAPI aware ($error_num)\n",2);
     bless $user_obj,"Win32::Exchange::Mailbox";
     return 0;
