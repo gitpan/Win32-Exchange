@@ -159,8 +159,7 @@ sub e60 {
     print "Mailbox did not exist\n";
     if ($mailbox = $provider->CreateMailbox($info_store_server,
                                             $pdc,
-                                            $mailbox_alias_name,
-                                            $email_domain
+                                            $mailbox_alias_name
                                             )
        ) {
       print "Mailbox create succeeded.\n";

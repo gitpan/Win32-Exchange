@@ -30,8 +30,8 @@ Win32::OLE->Option('_Unique' => 1);
 #@ISA = qw(Win32::OLE);
 
 my $Version;
-my $VERSION = $Version = "0.038";
-my $DEBUG = 5;
+my $VERSION = $Version = "0.039";
+my $DEBUG = 2;
 
 
 sub new {
@@ -364,19 +364,19 @@ sub _AdodbExtendedSearch {
       _DebugComment("fuzzy=$fuzzy\n",3);
       if ($RS->Fields($cols[($fuzzy - 1)])->value =~ /$search_string/i) {
         if (ref($RS->Fields($cols[($fuzzy - 1)])->value) eq "ARRAY") {
-          _DebugComment("found ".@{$RS->Fields($cols[1])->value}[0]."\n",3);
+          _DebugComment("array - ".@{$RS->Fields($cols[1])->value}[0]."\n",3);
           $search_val = @{$RS->Fields($cols[1])->value}[0]; 
-          $_[$return_point] = $search_val;
+          @{$_[$return_point]} = @{$search_val};
           return 1;
         } else {
-          _DebugComment("not found ".$RS->Fields($cols[1])->value."\n",3);
+          _DebugComment("string - ".$RS->Fields($cols[1])->value."\n",3);
           $search_val = $RS->Fields($cols[1])->value; 
           $_[$return_point] = $search_val;
           return 1;
         }
       }
     } else {
-      _DebugComment("found this: ".($RS->Fields($cols[1])->value)[0]."\n  -->".($RS->Fields($cols[0])->value)[0]."\n  -->$search_string\n",4);
+      _DebugComment("found: ".($RS->Fields($cols[1])->value)[0]."\n  -->".($RS->Fields($cols[0])->value)[0]."\n  -->$search_string\n",4);
       if (lc($search_string) eq lc($RS->Fields($cols[0])->value)) {
         if (ref($RS->Fields($cols[1])->value) eq "ARRAY") {
           _DebugComment("found (not fuzzy) (ARRAY)".$RS->Fields($cols[1])->value."\n",3);
@@ -537,7 +537,7 @@ sub _TraverseStorageGroups {
     if (scalar(keys %storage_groups) == 1) {
       foreach $mb (keys %{$storage_groups{$sg}}) {
         if (scalar(keys %{$storage_groups{$sg}}) == 1 || $mb eq $mb_store && $mb_store ne "") {
-          $_[4] = "LDAP://$info_store_server/".$storage_groups{$sg}{$mb}; 
+          $_[4] = "LDAP://".$storage_groups{$sg}{$mb}; 
           return 1;
         } else {
           next;

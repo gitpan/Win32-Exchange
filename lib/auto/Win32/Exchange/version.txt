@@ -1,5 +1,33 @@
 Version History
 ------------------------
+2003/08/05 -     0.040   -Happy Birthday, Win32::Exchange..  You're a year old!
+                           -Project was actually started 8/1/2002, though the first usable version is dated 8/7/2002 (version.txt)
+                         -Added IsMapiAware (Mailbox.pm) --E2K Only
+                         -Added IsMailboxEnabled (Mailbox.pm) --E2K Only
+                         -Added IsMailEnabled (Mailbox.pm) --E2K Only
+                         -Added GetUserObject (Mailbox.pm) --E2K Only
+                         -Added MailDisable (Mailbox.pm) --E2K Only
+                          -Fixed _E55CreateMailbox (Mailbox.pm) (Thanks Praveen Hombaiah)
+                            -for your observations regarding errors due to $org and $ou not populating if you send a container name, and
+                            -a parameter problem (not setting the var to the right @_[X] entry.)
+                         -Changed _TraverseStorageGroups (Exchange.pm) --E2K Only
+                           -pulled out the $server_name in the return string that TraverseStorageGroups returns, because it
+                             requires that the Exchange server have LDAP running in order for the call to work.
+                              -MS doesn't require it, so I shouldn't either.
+                         -Changed _AdodbExtendedSearch (Exchange.pm)
+                             -minor output changes (more user friendly)
+                         -Changed MailEnable (Mailbox.pm)
+                           -revamped code in MailEnable and now understand what earlier problems were with intermittent usability.
+                           -MailEnable should work better now (E2K only..).
+                            --Win32::Exchange ver 0.039
+                            --Win32::Exchange::Mailbox ver 0.041
+                            --Win32::Exchange::Const
+                            --Win32::Exchange::SMTP::Security ver 0.003
+2003/07/12 -     0.039   -Added GetDLMembers
+                            --Win32::Exchange ver 0.038
+                            --Win32::Exchange::Mailbox ver 0.040
+                            --Win32::Exchange::Const
+                            --Win32::Exchange::SMTP::Security ver 0.003
 2003/06/13 -     0.038   -fixed _E2KDeleteMailbox for very bad code issues (thanks to Peter Peterson for alerting me to this).
                          -fixed _DebugComment and ReportArgError issues in Mailbox.pm and SMTP::Security.pm.
                          -fixed adModeReadWrite issue in SetAttributes (thanks to Peter Peterson for helping me debug this).
