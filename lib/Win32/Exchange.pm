@@ -30,7 +30,7 @@ Win32::OLE->Option('_Unique' => 1);
 #@ISA = qw(Win32::OLE);
 
 my $Version;
-my $VERSION = $Version = "0.039";
+my $VERSION = $Version = "0.040";
 my $DEBUG = 2;
 
 

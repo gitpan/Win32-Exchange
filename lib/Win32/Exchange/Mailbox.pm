@@ -28,7 +28,7 @@ Win32::OLE->Option('_Unique' => 1);
 #@ISA = qw(Win32::OLE);
 
 my $Version;
-my $VERSION = $Version = "0.041a";
+my $VERSION = $Version = "0.041b";
 my $DEBUG = 1;
 
 sub new {
@@ -1180,6 +1180,36 @@ sub SetOwner {
   }
   bless $new_mailbox,"Win32::Exchange::Mailbox";
   return 1;
+}
+sub GetPerms {
+  my $error_num;
+  my $error_name;
+  my $provider = $_[0];
+
+  bless $provider,"Win32::OLE";
+  Win32::OLE->LastError(0);
+  my $type = Win32::OLE->QueryObjectType($provider);
+  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("failed querying OLE Object type for Exchange Server Determination during call to SetAttributes\n",1);
+    bless $provider,"Win32::Exchange::Mailbox";
+    return 0;
+  }
+  bless $provider,"Win32::Exchange::Mailbox";
+  
+  my $rtn;
+  if ($type eq "IPerson") {
+    #IPerson returns should CDO.Person (E2K)
+    #Sorry, not implemented yet
+    return 0;
+  } else {
+    #nothing returns for ADsNamespaces (E5.5)
+    if ($rtn = _E55GetPerms(@_)) {
+      bless $provider,"Win32::Exchange::Mailbox";
+      return $rtn;
+    }
+  }
+  bless $provider,"Win32::Exchange::Mailbox";
+  return 0;
 }
 
 sub _E55GetPerms {

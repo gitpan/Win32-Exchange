@@ -1,5 +1,8 @@
 Version History
 ------------------------
+2003/11/05 -     0.041   -bugfix for for CreateMailbox when Exchange Server is not a DC also. (Bad, Steven...)  Thanks to Peter Peterson and William Jothimuthu for reporting this bug.
+2003/10/18 -     0.040b  -minor bugfixes, readded GetPerms sub..  oops.
+2003/08/05 -     0.040a  -minor bugfixes IsMapiAware,
 2003/08/05 -     0.040   -Happy Birthday, Win32::Exchange..  You're a year old!
                            -Project was actually started 8/1/2002, though the first usable version is dated 8/7/2002 (version.txt)
                          -Added IsMapiAware (Mailbox.pm) --E2K Only
