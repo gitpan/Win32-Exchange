@@ -1,5 +1,38 @@
 Version History
 ------------------------
+2003/05/05 -     0.036   -Moved Mailbox functions to Win32::Exchange::Mailbox
+                         -Added FindCloseDC
+                         -Added Win32::Exchange::SMTP::Security;
+                                 uses an Exchange 2000 SP3 hotfix
+                         -Win32::Exchange uses Win32::Exchange::   Const, Mailbox and SMTP::Security by default
+2003/02/17 -     0.035   -Deprecated AdodbSearch, and modified the existing functions that used it to conform to _AdodbExtendedSearch.
+2003/01/17 -     0.034   -Created MailEnable function (avail only on E2K currently.)
+2002/12/04 -     0.033a  -Changed _GetLDAPPath so it used an &ed search for the "rdn" of the server to make the resultset only 1 result, 
+                          and improve speed.
+2002/12/03 -     0.033   -Changed _E55GetMailbox and AddDLMembers  so it used an &ed search to make the resultset only 1 result, in order
+                          to improve speed if you have large amounts of mailboxes to search through.
+2002/11/15 -     0.032   -Changed _AdodbExtendedSearch so it used a "paged search", and so that GetVersion would return a result set
+                          even if the result set was larger than the allowed maximum (currently default set to 100 in Exchange 5.5).
+                         -Changed _AdodbExtendedSearch so that a non-fuzzy search would also be case-insensitive.
+                         -Changed new so that if you pass new a server name, and it must perform a GetVersion to determine what to create,
+                          it could do so and create the object for return to the perl script.
+                         -Modified GetVersion so it would supress the "Class not Found" error if the workstation did not have the E2K
+                          tools loaded, as it tries to create a "CDOEXM.ExchangeServer" object (if the tools aren't loaded, the user doesn't
+                          need to know that a class was not found, because they aren't worried about a class, just the version).
+                         -Changed AddDLMembers and _E55GetMailbox to add:
+                                -the ability to search for the "distinguishedname" of the DL and of the mailbox you want to add
+                                -the ability to send buth functions either an alias or distinguishedname of the mailbox and/or the DL.
+                         -This version is dedicated to:  Mr. Peter Thoenen EPS (e-mail supressed for confidentiality), who came to me with
+                          the problems above, and didn't give up on me, even after a week (actually more like a month) of playing e-mail tag
+                          and going through endless "check this value" tag.....  But we finally worked through the problems and now you have
+                          build 032.
+                         -Made a change _E2KCreateMailbox to take heed of:
+                              http://support.microsoft.com/default.aspx?scid=kb;EN-US;q321039
+                          to correct errors in E2K creation that I did not experience in my testing.
+                            - Thanks to Jeremy D. Brinkman (e-mail supressed for confidentiality) for being a guinea pig on this update.
+                                I knew about this as a potential issue, but hadn't experienced it in testing.
+                         -Added to the docs based on feedback.
+                          
 2002/10/04 -     0.031   -Changed GetVersion for 5.5 to query the individual Exchange Servers and not AD.
                               -If there is a domain that you query that does not have:
                                   -an AD Connector to an AD domain, or

@@ -1,0 +1,505 @@
+<HTML>
+<HEAD>
+<TITLE>Win32::Exchange::Mailbox</TITLE>
+<LINK REL="stylesheet" HREF="../../../../Active.css" TYPE="text/css">
+</HEAD>
+
+<BODY>
+<TABLE BORDER=0 CELLPADDING=0 CELLSPACING=0 WIDTH=100%>
+<TR><TD CLASS=block VALIGN=MIDDLE WIDTH=100% BGCOLOR="#cccccc">
+<FONT SIZE=+1><STRONG><P CLASS=block>&nbsp;Win32::Exchange::Mailbox - Exchange 5.5 and Exchange 2000 mailbox maintenance functions</P></STRONG></FONT>
+</TD></TR>
+</TABLE>
+
+<A NAME="__index__"></A>
+
+<UL>
+
+    <LI><A HREF="#name">NAME</A></LI>
+    <LI><A HREF="#synopsis">SYNOPSIS</A></LI>
+    <LI><A HREF="#description">DESCRIPTION</A></LI>
+    <UL>
+      <LI><A HREF="#functions">Functions</A></LI>
+        <UL>
+          <LI><A HREF="#function_errorcheck">ErrorCheck</A></LI>
+          <LI>Exchange 5.5</LI>
+          <UL>
+            <LI><A HREF="#function_new">new</A></LI>
+            <LI><A HREF="#function_AddDLMembers">AddDLMembers</A></LI>
+            <LI><A HREF="#function_CreateMailbox">CreateMailbox</A></LI>
+            <LI><A HREF="#function_GetMailbox">GetMailbox</A></LI>
+            <LI><A HREF="#function_SetAttributes">SetAttributes</A></LI>
+            <LI><A HREF="#function_SetPerms">SetPerms</A></LI>
+            <LI><A HREF="#function_SetOwner">SetOwner</A></LI>
+          </UL>
+          <LI>Exchange 2000</LI>
+          <UL>
+            <LI><A HREF="#function_new">new</A></LI>
+            <LI><A HREF="#function_AddDLMembers">AddDLMembers</A></LI>
+            <LI><A HREF="#function_CreateMailbox">CreateMailbox</A></LI>
+            <LI><A HREF="#function_MailEnable">MailEnable</A></LI>
+            <LI><A HREF="#function_SetAttributes">SetAttributes</A></LI>
+            <LI><A HREF="#function_SetPerms">SetPerms</A></LI>
+          </UL>
+        </UL>
+
+    </UL>
+
+    <LI><A HREF="#examples">EXAMPLES</A></LI>
+    <LI><A HREF="#notes">NOTES</A></LI>
+    <UL>
+
+        <LI><A HREF="#incompatibilities">Incompatibilities</A></LI>
+        <LI><A HREF="#bugs and limitations">Bugs and Limitations</A></LI>
+    </UL>
+
+    <LI><A HREF="#see also">SEE ALSO</A></LI>
+    <LI><A HREF="#authors">AUTHORS</A></LI>
+    <LI><A HREF="#version">VERSION</A></LI>
+</UL>
+<HR>
+<P>
+<H1><A NAME="name">NAME</A></H1>
+<P>Win32::Exchange::Mailbox - Exchange 5.5 and Exchange 2000 functions</P>
+<P>
+<HR>
+<H1><A NAME="synopsis">SYNOPSIS</A></H1>
+<PRE>
+  $provider = Win32::Exchange::Mailbox->new($info_store_server)) ||
+      die " - error creating new object\n';
+
+  #--- Exchange 5.5
+  $mailbox = $provider->CreateMailbox($info_store_server,$mailbox_alias_name);
+  if (!$mailbox) {
+    die "Error creating mailbox\n";
+  }
+  print "Create successful\n";
+  $mailbox->SetAttributes(\%Attributes);
+  $mailbox->SetOwner("$domain\\$mailbox_alias_name");
+  $mailbox->SetPerms(\@Perms);
+
+  #--- Exchange 2000
+  $mailbox = $provider->CreateMailbox($info_store_server,
+                                           $pdc,
+                                           $mailbox_alias_name,
+                                           "domainname.com") ||
+    print 'Mailbox create failed\n';
+  $mailbox->Win32::Exchange::SetAttributes(\%Attributes) ||
+        print 'Set Attributes failed\n';
+  $mailbox->SetPerms(\@Perms);
+</PRE>
+<P>
+<HR>
+<H1><A NAME="description">DESCRIPTION</A></H1>
+For now, this module creates and modifies Exchange 5.5 and 2000 mailboxes, has growing support
+for distribution lists, and some server API queries. Eventually it will do more, but for now, that's it.
+Kind of vague..  isn't it?<BR>
+<BR>
+Win32::Exchange uses Win32::OLE exclusively (and technically is just a wrapper for the
+underlying OLE calls) so feel free to look at them, and make a suggestion or two.<BR>
+<BR>
+Exchange 5.5 mailbox creation uses the LDAP interface on the Exchange server exclusively.  If the LDAP protocol
+is disabled on your Server, you will not be able to use this module until you turn it on.<BR>
+<BR>
+Exchange 2000 mailbox creation is a little bit different because it is based on COM objects, instead of LDAP,
+and you need the Exchange 2000 client tools loaded on the box you want to do the creation on in order to work
+correctly.  These are kind of modest requirements, but please check the NOTES section for more on software
+requirements and good ideas.<BR>
+<BR>
+All methods return 0 (or undef) on failure and 1 for success unless otherwise noted.<BR>
+<P>
+<H2><A NAME="functions">Functions</A></H2>
+<DL>
+<DT><STRONG><A NAME="function_new">$provider = Win32::Exchange-&gt;new($server_name | $version);</A></STRONG><BR>
+<DD>
+The <A HREF="#item_new"><CODE>new()</CODE></A> class method starts a new instance of an Exchange provider object.
+It returns a reference to this object or <B>undef</B> if the creation fails.<BR>
+<BR>
+<UL>
+  <LI>You can send a server name or a version number</LI>
+  <LI>If used, $version must equal 5.5 or 6.0.</LI>
+  <UL>
+    <LI>5.5 would create a Win32::OLE object of type AdsNamespaces for use with Exchange 5.5</LI>
+    <LI>6.0 would create a Win32::OLE object of type CDO.Person for use with Exchange 2000</LI>
+  </UL>
+  <LI>If used, $server_name must NOT be prepended with backslashed</LI>
+</UL>
+<BR>
+$provider = Win32::Exchange::Mailbox-&gt;new($server_name); #new performs a check on your exchange server for versioning<BR>
+$provider = Win32::Exchange::Mailbox-&gt;new($version); #creates an object suitable for a $version server.. ("5.5" or "6.0")<BR>
+<BR>
+<A HREF="../Exchange.html#function_GetVersion"><B>Win32::Exchange::GetVersion</B></A> can return an acceptable version number for your Exchange server.
+<P></P>
+<DT><STRONG><A NAME="function_AddDLMembers">$provider-&gt;<CODE>AddDLMembers($info_store_server,$dl_name,\@new_dl_members[,1]);#Exchange 5.5 sending an alias name</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function_AddDLMembers">$provider-&gt;<CODE>AddDLMembers($info_store_server,$dl_dn,\@new_dl_members);#Exchange 5.5 sending a "distinguished name"</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function_AddDLMembers">$provider-&gt;<CODE>AddDLMembers($dl_name,\@new_dl_members);#Exchange 2000</CODE></A></STRONG><BR>
+<DD>
+The only noticable difference between Exchange 5.5 and 2000 for this call are the parameters sent to it, and the provider version that
+should be sent.  In either case, both functions check parameters and provider versions, so you shouldn't hit any snafus.<BR>
+<BR>
+The Exchange 5.5 version now accepts either that "alias name" or the "distinguished name" of both the distribution list and the mailbox.
+As well, the module can search for both the DL and MB "distinguished name" if you choose not to send it (but send the ontional "1" signifying you want it to search).  If you send an alias name and do
+not choose to search for it, the module will expect that your alias is in the default container.
+<BR>
+  #Exchange 5.5<BR>
+  if ($provider->AddDLMembers($info_store_server,$dl_name,/@new_dl_members),1) { #Search for $dl_name<BR>
+    print "Added members successfully\n";<BR>
+  }<BR>
+<BR>
+  #Exchange 2000<BR>
+  if ($provider->AddDLMembers($dl_name,/@new_dl_members)) {<BR>
+    print "Added members successfully\n";<BR>
+  }<BR>
+<BR>
+<BR>
+<DT><STRONG><A NAME="function_CreateMailbox"></A></STRONG><BR>
+<DT><STRONG><A NAME="function__E55CreateMailbox">$provider-&gt;<CODE>CreateMailbox($server_name,$mailbox_name,[$org,$ou]);#Exchange 5.5</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function__E2kCreateMailbox">$provider-&gt;<CODE>CreateMailbox($server_name,$dc_name,$mailbox_name,$mail_domain,[$storage_group,$mailbox_store]);#Exchange 2000</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function__E2kCreateMailbox">$provider-&gt;<CODE>CreateMailbox($server_name,$dc_name,$mailbox_name,$mail_domain,[$mailbox_store_dn]);#Exchange 2000 using dn</CODE></A></STRONG><BR>
+<DD>
+The <A HREF="#function_CreateMailbox"><CODE>CreateMailbox()</CODE></A> function behaves differently depending on
+which type of provider it is passed (CDO.Person [E2K] or ADsNamespaces[5.5]).  As well, the arguments for the Exchange
+5.5 and 2000 functions are different.<BR>
+<BR>
+When making Exchange 2000 Mailboxes, it should be noted that if you are using multiple "storage groups",
+or multiple "mailbox stores" on the Exchange Server, the presence of $storage_group and $mailbox_store are not optional (unless replaced by a valid mailbox store distinguished name as the fifth parameter),
+as the function will fail because it doesn't know where to put your new mailbox.<BR>
+<BR>
+Lastly, if you plan on running <STRONG><A NAME="../Exchange.html#function_LocateMailboxStore">LocateMailboxStore</STRONG> before
+the CreateMailbox, you can pass the distinguished name of the "located" mailbox store instead of the "storage group"
+and "mailbox store" names.<BR>
+<BR>
+<BR>
+<DT><STRONG><A NAME="function_GetMailbox"></A></STRONG><BR>
+<DT><STRONG><A NAME="function__E55GetMailbox">$provider-&gt;<CODE>GetMailbox($server_name,$mailbox_name,[$org,$ou]);</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function__E55GetMailbox">$provider-&gt;<CODE>GetMailbox($server_name,$mailbox_name,[1]);#Exchange 5.5</CODE></A></STRONG><BR>
+<DD>
+The <A HREF="#function_GetMailbox"><CODE>GetMailbox()</CODE></A> function is implemented for Exchange 5.5 and 2000.<BR>
+<BR>
+The base object that is returned for Exchange 2000 mailboxes is the LDAP user object, and the object that is returned for Exchange 5.5 is
+the 5.5 mailbox object.<BR>
+<BR>
+Optionally, you can tell the function to search for your object if it does not reside in the default container (cn=Recipients,ou=yourOU,o=YourO),
+or send it the "distinguished name" of your object (useful in Exchange 5.5 only).<BR>
+<BR>
+  $mailbox = $provider->GetMailbox($info_store_server,$mailbox_alias_name,$org,$ou);<BR>
+  if ($mailbox) {<BR>
+    print "Mailbox exists\n";<BR>
+  }<BR>
+<BR>
+- OR - when you want to search for the mailbox... (Exchange 5.5 only)<BR>
+<BR>
+  $mailbox = $provider->GetMailbox($info_store_server,$mailbox_alias_name,1);<BR>
+  if ($mailbox) {<BR>
+    print "Mailbox exists\n";<BR>
+  }<BR>
+
+<BR>
+<BR>
+<DT><STRONG><A NAME="function_GetOwner">$mailbox-&gt;GetOwner($nt_user,[$sid_type]);#Exchange 5.5</A></STRONG><BR>
+<DD>
+The <A HREF="#function_GetOwner"><CODE>GetOwner()</CODE></A> method takes an Exchange 5.5 mailbox object like one provided by
+<A HREF="#function_GetMailbox"><CODE>GetMailbox()</CODE></A> or <A HREF="#function_CreateMailbox"><CODE>CreateMailbox()</CODE></A>
+along with a variable to store the results in, and an optional "SID type", in order for the function to return a string type of
+your choosing.<BR>
+<BR>
+This function defaults to ADS_SID_WINNT_PATH if no sid_type is specified.  I don't believe there is an E2K equivelant.<BR>
+<BR>
+$mailbox->GetOwner($nt_user,0x2) || print 'Error getting owner\n'; #0x2 == ADS_SID_SAM<BR>
+<BR>
+<BR>
+<DT><STRONG><A NAME="function_MailEnable">$user_obj-&gt;<CODE>MailEnable([$address]);#E2K only (for now)</CODE></A></STRONG><BR>
+<DD>
+This method allows you mail-enable an AD user account.  Optionally, you can set the address to send mail for the user if it
+was to be redirected to an off-site account (perhaps, the user's hotmail.com, juno.com, or yahoo.com mail account).<BR>
+<BR>
+  if ($user_obj->MailEnable("pcgeek@bigfoot.com") {<BR>
+    print "Success!";<BR>
+  }<BR>
+<BR>
+<BR>
+<DT><A NAME="function_SetAttributes"></A>
+<DT><STRONG><A NAME="function__E55SetAttributes">$mailbox-&gt;<CODE>SetAttributes(\%attrs);Exchange 5.5</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function__E2KSetAttributes">$ad_user_object-&gt;<CODE>SetAttributes(\%attrs);Exchange 2000</CODE></A></STRONG><BR>
+<DD>
+The <A HREF="#function_SetAttributes"><CODE>SetAttributes()</CODE></A> method takes a specially formed hash structure,
+and is different depending on which version of Exchange you are trying to set attributes for:<BR>
+<BR>
+Exchange 5.5:<BR>
+<BR>
+  $Exchange_Info{'Deliv-Cont-Length'}='6000';<BR>
+  $Exchange_Info{'Submission-Cont-Length'}='6000';<BR>
+  $Exchange_Info{'givenName'}="This";<BR>
+  $Exchange_Info{'sn'}="Isatest";<BR>
+  $Exchange_Info{'cn'}=$mailbox_full_name;<BR>
+  $Exchange_Info{'mail'}="$mailbox_alias_name\@manross.net";<BR>
+  $Exchange_Info{'rfc822Mailbox'}="$mailbox_alias_name\@manross.net";<BR>
+<BR>
+  push (@$Other_MBX,"RFAX:$Exchange_Info{'cn'}\@");<BR>
+  push (@$Other_MBX,"smtp:secondary\@$mail_domain");<BR>
+  push (@$Other_MBX,"smtp:tertiary\@$mail_domain");<BR>
+  $Exchange_Info{'otherMailbox'}=$Other_MBX;<BR>
+<BR>
+  Note:<BR>
+  <UL>
+    <LI>Setting the sn, cn, mail, givenname and rfc822Mailbox are required.  If the create succeeds and you do not set these attributes, your mailbox will have a fulname of "Exchange username Mailbox" (where username is the $mailbox_name that you pased to <A HREF="#function_SetOwner">SetOwner</A></LI>
+  </UL>
+  See Also (Exchange 5.5):<BR>
+  <A HREF="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/ds2x/hh/ds2x/exds_ds2exchgd_5pgl.asp">Exchange 5.5 and ADSI (ADSI Exchange)</A><BR>
+<BR>
+Exchange 2000:<BR>
+<BR>
+  push (@$proxies,'SMTP:'.$mailbox_alias_name.'@manross.net');<BR>
+  push (@$proxies,'smtp:secondary@manross.net');<BR>
+  push (@$proxies,'smtp:tertiary@manross.net');<BR>
+  $Attributes{"IMailRecipient"}{ProxyAddresses} = $proxies;<BR>
+  $Attributes{"IMailRecipient"}{IncomingLimit} = 6000;<BR>
+  $Attributes{"IMailRecipient"}{OutgoingLimit} = 6000;<BR>
+  $Attributes{"IMailboxStore"}{EnableStoreDefaults} = 0;<BR>
+  $Attributes{"IMailboxStore"}{StoreQuota} = 100;<BR>
+  $Attributes{"IMailboxStore"}{OverQuotaLimit} = 120;<BR>
+  $Attributes{"IMailboxStore"}{HardLimit} = 130;<BR>
+<BR>
+  See Also (Exchange 2000):<BR>
+    <A HREF="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/wss/wss/_cdo_recipient_management_interfaces.asp">Interfaces and attributes</A><BR>
+<BR>
+<BR>
+<DT><STRONG><A NAME="function_SetOwner">$mailbox-&gt;SetOwner($user);</A></STRONG><BR>
+<DD>
+The <A HREF="#function_SetOwner"><CODE>SetOwner()</CODE></A> method takes a string reference
+(ex. "DOMAIN\USERNAME") and is currently only applicable for use in setting the owner on
+Exchange 5.5 mailboxes (the "Assoc-NT-Account" property of the mailbox).  I don't believe there is an
+E2K equivelant.<BR>
+<BR>
+  $mailbox->SetOwner(&quotDOMAIN\username&quot) || print 'Error setting owner\n'<BR>
+<BR>
+<BR>
+<DT><STRONG><A NAME="function__E55SetPerms">$mailbox-&gt;SetPerms(\@users);</A></STRONG><BR>
+<DD>
+The <A HREF="#function_SetPerms"><CODE>SetPerms()</CODE></A> method takes an array reference of user or
+group names.  This function works on Exchange 5.5 and Exchange 2000 mailboxes.  <B>The Exchange 2000 version requires
+Service Pack 1, with a hotfix, Service Pack 2, or later Service pack release, and is reccommended that the Exchange
+Client Tools be of the same Service Pack level as the server.</B><BR>
+<BR>
+  push (@PermsUsers,&quot$domain\\$mailbox_name&quot);<BR>
+  push (@PermsUsers,&quot$domain\\Some Group&quot);<BR>
+  $mailbox->SetPerms(\@PermsUsers) || print 'Error setting perms\n'<BR>
+<BR>
+<BR>
+</DL>
+<H2><A NAME="module options">Module Options</A></H2>
+Currently there are none, but I intend to make DEBUG a passable parameter as it is currently hard-coded to 1 (enabled).<BR>
+<H1><A NAME="examples">EXAMPLES</A></H1>
+<pre>
+use Win32::Exchange;
+use Win32::AdminMisc;
+
+$domain = Win32::DomainName();
+$pdc = Win32::AdminMisc::GetPDC($domain);
+$mailbox_alias_name='thisisatest';
+$mailbox_full_name="This $mailbox_alias_name Isatest";
+$info_store_server="HOMEEXCH2";
+
+if (!Win32::Exchange->GetVersion($info_store_server,\%ver) ) {
+  die "$rtn - Error returning into main from GetVersion\n";
+}
+
+print "version      = $ver{ver}\n";
+print "build        = $ver{build}\n";
+print "service pack = $ver{sp}\n";
+
+if (!($provider = Win32::Exchange::Mailbox->new($ver{'ver'}))) {
+  die "$rtn - Error returning into main from new ($Win32::Exchange::Mailbox::VERSION)\n";
+}
+
+if ($ver{ver} eq "5.5") {
+  if (!Win32::Exchange::GetLDAPPath($info_store_server,$org,$ou)) {
+    print "Error returning into main from GetLDAPPath\n";
+    exit 1;
+  }
+  print "GetLDAPPath succeeded\n";
+  if ($mailbox = $provider->GetMailbox($info_store_server,$mailbox_alias_name,$org,$ou)) {
+    print "Mailbox already existed\n";
+    if ($mailbox->SetOwner("$domain\\$mailbox_alias_name")) {
+      print "SetOwner in GetMailbox worked!\n";
+    }
+  } else {
+    $mailbox = $provider->CreateMailbox($info_store_server,$mailbox_alias_name,$org,$ou);
+    if (!$mailbox) {
+      die "error creating mailbox\n";
+    }
+    print "We created a mailbox!\n";
+  }
+
+  $Exchange_Info{'Deliv-Cont-Length'}='6000';
+  $Exchange_Info{'Submission-Cont-Length'}='6000';
+  $Exchange_Info{'givenName'}="This";
+  $Exchange_Info{'sn'}="Isatest";
+  $Exchange_Info{'cn'}=$mailbox_full_name;
+  $Exchange_Info{'mail'}="$mailbox_alias_name\@insight.com";
+  $Exchange_Info{'rfc822Mailbox'}="$mailbox_alias_name\@insight.com";
+
+  $smtp="smtp:another_name_to_send_to\@$mail_domain";
+  push (@$Other_MBX,$smtp);
+  #be careful with 'otherMailbox'es..  You are deleting any addresses that may exist already
+  #if you set them via 'otherMailbox' and don't get them first (you are now forewarned).
+  $Exchange_Info{'otherMailbox'}=$Other_MBX;
+
+  $mailbox->SetAttributes(\%Exchange_Info);
+  $mailbox->SetOwner("$domain\\$mailbox_alias_name");
+
+  my @PermsUsers;
+  push (@PermsUsers,"$domain\\$mailbox_alias_name");
+  push (@PermsUsers,"$domain\\Exchange Perm Users"); #Group that needs perms to the mailbox...
+
+  $mailbox->SetPerms(\@PermsUsers);
+  my @new_dl_members;
+  push (@new_dl_members,$mailbox_alias_name);
+  $provider->AddDLMembers($info_store_server,"newdltest",\@new_dl_members);
+
+} elsif ($ver{ver} eq "6.0") {
+  $storage_group = ""; #you'd need to define this if you had more than 1 storage group on 1 server.
+  $mailbox_store = ""; #you'd need to define this if you had more than 1 mailbox store on 1 or more storage groups.
+  if (Win32::Exchange::LocateMailboxStore($info_store_server,$storage_group,$mailbox_store,$store_name,\@counts)) {
+    print "storage group = $storage_group\n";
+    print "mailbox store = $mailbox_store\n";
+    print "located store distinguished name= $store_name\n";
+    print "$info_store_server\n";
+    print "  Total:\n";
+    print "    storage groups = @counts[0]\n";
+    print "    mailbox stores = @counts[1]\n";
+  }
+  if ($mailbox = $provider->CreateMailbox($info_store_server,
+                                              $pdc,
+                                              $mailbox_alias_name,
+                                              "insight.com",
+                                              $store_name
+                                             )
+     ) {
+    print "Mailbox create succeeded\n";
+  } else {
+    die "Failure is the option that you have selected!\n";
+  }
+  #be careful with proxy addresses..  You are deleting any addresses that may exist already
+  #if you set them via ProxyAddresses (you are now forewarned).
+  push (@$proxies,'SMTP:'.$mailbox_alias_name.'@manross.net');
+  push (@$proxies,'smtp:secondary@manross.net');
+  push (@$proxies,'smtp:primary@manross.net');
+  push (@$proxies,'smtp:tertiary@manross.net');
+  $Attributes{"IMailRecipient"}{ProxyAddresses} = $proxies;
+  $Attributes{"IMailRecipient"}{IncomingLimit} = 6000;
+  $Attributes{"IMailRecipient"}{OutgoingLimit} = 6000;
+  $Attributes{"IMailboxStore"}{EnableStoreDefaults} = 0;
+  $Attributes{"IMailboxStore"}{StoreQuota} = 100; #at 100KB starts getting warnings
+  $Attributes{"IMailboxStore"}{OverQuotaLimit} = 120; #at 120KB can't send...
+  $Attributes{"IMailboxStore"}{HardLimit} = 130; #at 130KB, can't do anything...
+  if (!$mailbox->Win32::Exchange::SetAttributes(\%Attributes)) {
+    die "Error setting 2K Attributes\n";
+  } else {
+    print "Set Attributes correctly\n";
+  }
+  my @PermsUsers;
+  push (@PermsUsers,"$domain\\$mailbox_alias_name");
+  push (@PermsUsers,"$domain\\Exchange Perm Users"); #Group that needs perms to the mailbox...
+
+  $mailbox->SetPerms(\@PermsUsers);
+  exit 1;
+}
+</PRE>
+<H1><A NAME="notes">NOTES</A></H1>
+<UL>
+  <LI>NT4 clients talking to Exchange servers will need the following software from Microsoft installed:</LI>
+  <UL>
+    <LI>ADSI 2.5</LI>
+    <LI>ADSI SDK (Software Development Kit)</LI>
+    <LI>ADsSecurity.dll -- this dll must be registered on your system using the command <B>'regsvr32 adssecurity.dll'</B> (This dll is found in the ADSI SDK)</LI>
+    <LI>The Exchange 5.5 Admin program is optional, but helpful in viewing data related to Exchange 5.5 and 2000.</LI>
+  </UL>
+  <LI>W2K/XP/.NET clients talking to Exchange servers will need the following software from Microsoft installed:</LI>
+  <UL>
+    <LI>No additional software required (with the exception of the Exchange 2000 requirements below)</LI>
+  </UL>
+  <LI>All clients manipulating Exchange 2000 mailboxes will need the following software:</LI>
+  <UL>
+    <LI>The Exchange 2000 System Manager (from the Exchange 2000 Server CD)</LI>
+    <LI>The Exchange 5.5 Admin program is optional, but helpful in viewing data related to Exchange 5.5 and 2000.</LI>
+  </UL>
+  <LI>I would think this goes without saying, but:</LI>
+  <UL>
+    <LI>Test this module in a test environment before touching your production environment.</LI>
+    <LI>You need Administrative rights to do most if not all of these tasks, on the Exchange and AD servers</LI>
+    <LI>I am not responsible for mistakes in this module, misuse of this code (though I will take criticism, if you can argue that I have done something bad)</LI>
+    <LI>If you find a mistake, or bug please inform me of the mistake or a possible solution you have found.</LI>
+  </UL>
+</UL>
+<H2><A NAME="incompatabilities">Incompatabilities</A></H2>
+<UL>
+  <LI>NT4 clients installed with the software mentioned in the notes section, will work, but are prone to breaking intermittently.  Microsoft has explained this by saying that there is minimal dependency checking in this toolset (ADSI 2.5), please see the readme.txt provided with this PPM distribution for further rants on this topic.</LI>
+</UL>
+
+<H2><A NAME="bugs and limitations">Bugs and Limitations</A></H2>
+<UL>
+<LI>E2K: Setting permissions on Exchange 2000 mailboxes require the Exchange Client Tools service packed to SP2 or higher, and is reccommended to be the same service pack level as the server</A>.</LI>
+<LI>E2K: Mailbox creation will fail on Exchange 2000 if you do not pass a storage group and mailbox store when there are more than one of either on the server that you have selected in your <A HREF="function_CreateMailbox">CreateMailbox</A>.</LI>
+<LI>E55: Because I use GetObject in the <A HREF="function_GetMailbox">GetMailbox</A> and <A HREF="function_CreateMailbox">CreateMailbox</A> sub, it's possible that a hidden Recipient may exist for the name you have chosen to get/create and the get/create may fail.  This is easily fixed by changing the underlying GetObject call to an OpenDSObject call, but this call, needs an administrative name sent with it so for now, the GetObject works in most cases, and eventually I'll add another function that allows for use of the OpenDSObject, so live with it until I implement a new function for it or by all means, create your own function.  This only pertains to Exchange 5.5.</LI>
+</UL>
+<P>
+<HR>
+<H1><A NAME="see also">SEE ALSO</A></H1>
+<UL>
+  <LI><A HREF="../Exchange.html">Win32::Exchange</A></LI>
+  <LI><A HREF="./SMTP/Security.html">Win32::Exchange::SMTP::Security</A></LI>
+  <LI><A HREF="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/wss/wss/_exch2k_welcome_to_exchange.asp">The Exchange 2000 SDK</A></LI>
+  <LI><A HREF="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/ds2x/hh/ds2x/exds_ds2exchgd_5pgl.asp">Exchange 5.5 and ADSI (ADSI Exchange)</A></LI>
+  <LI><A HREF="http://www.microsoft.com/ntworkstation/downloads/Other/ADSI25.asp">Microsoft ADSI 2.5 and ADSI SDK Download page</A></LI>
+  <LI><A HREF="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/wss/wss/_cdo_recipient_management_interfaces.asp">Exchange 2000 Interfaces and attributes</A></LI>
+  <LI><A HREF="http://aspn.activestate.com/ASPN/Mail/">Activestate Mailing List Archive (it's a great place to answer your own questions)</A></LI>
+  <LI><A HREF="http://support.microsoft.com/default.aspx?scid=kb%3Ben-us%3B810913">Post SP3 Hotfix that allows programmatic access to the SMTP Virtual Server's access list</A></LI>
+</UL>
+<P>
+<HR>
+<H1><A NAME="authors">AUTHORS</A></H1>
+This module is based on an Exchange 5.5 mailbox creation script that has been traveling around the Internet and Activestate's mailing list archives for years.<BR>
+<BR>
+I picked up on the thread that started my mailbox creation frenzy in 1999, and have been modifying the subroutines ever since.<BR>
+<BR>
+With the advent of Exchange 2000, another script came to light, that tried to parse the Storage Group name and Mailbox Store names into
+an incredibly long string to allow for Exchange 2000 mailbox creation (circa 2001?).<BR>
+<BR>
+I knew that the entire string had to be all parsed together somewhere in the Directory, and it was just a matter of finding it.<BR>
+<BR>
+It was; LocateMailboxStore is an implementation of that idea.<BR>
+<BR>
+As it turns out, there are a lot of tricks like LocateMailboxStore that have helped develop this module from
+a string concatenation mess into a lot of fancy searches for the complete ldap paths and distinguished names
+that power mailbox creation.<BR>
+<BR>
+Most of the fancy searches were created by poking around in the objects themselves with ADSVW.EXE (an ADSI
+SDK tool), and then writing an ADODB search to return the right result set.<BR>
+<BR>
+Thanks for taking the time to read all of this..<BR>
+<BR>
+I'd like to extend thanks to the following:<BR>
+<UL>
+  <LI>Andrew Bastien (activestate list member circa 1999) for his part in this project, even though he didn't know this would eventually become a project, and for his help years ago regarding Exchange 5.5 mailbox creation using perl.</LI>
+  <LI>Dave Roth, in part for advice and comments on my code, and then also for offering to host the PPM for this module!</LI>
+  <LI><P>Jan Dubois &lt;<A HREF="mailto:jand@activestate.com">jand@activestate.com</A>&gt; and Everyone at Activestate for Win32::OLE, without which this module wouldn't be possible.</LI>
+  <LI>Activestate, for having the mailing list archive chock-full-o' source code and answers to questions asked and answered way too many times!</LI>
+  <LI>Microsoft...  for exposing the Exchange 2000 mailbox interface, &lt;sarcasm&gt;and for NOT updating their documentation on the MSDN Developer network website regarding the ability to programatically change permissions on mailboxes (and suggesting that you can't do it) &lt;/sarcasm&gt;</LI>
+</UL>
+<BR>
+<P>Please send questions, comments or suggestions about this module to Steven Manross &lt;<A HREF="mailto:steven@manross.net">steven@manross.net</A>&gt.</P>
+<HR>
+<H1><A NAME="version">VERSION</A></H1>
+<P>Version 0.036     May 5, 2003</P>
+<H1><A NAME="copyright">Copyright</A></H1>
+Microsoft, Active Directory, ADSI, Windows, Windows NT, MSDN, and Exchange are either registered trademarks or trademarks of Microsoft Corporation in the United States and/or other countries.<BR>
+<BR>
+<BR>
+<TABLE BORDER=0 CELLPADDING=0 CELLSPACING=0 WIDTH=100%>
+<TR><TD CLASS=block VALIGN=MIDDLE WIDTH=100% BGCOLOR="#cccccc">
+<FONT SIZE=+1><STRONG><P CLASS=block>&nbsp;Win32::Exchange::Mailbox - Microsoft Exchange mailbox related functions</P></STRONG></FONT>
+</TD></TR>
+</TABLE>
+</BODY>
+</HTML>

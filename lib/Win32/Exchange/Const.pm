@@ -31,6 +31,7 @@ use Exporter;
 		  ADS_USE_SEALING
 		  ADS_USE_SIGNING
 		  ADS_USE_SSL
+		  adModeReadWrite
                  );
 
 use constant ADS_ACEFLAG_INHERIT_ACE => 0x2;
@@ -58,5 +59,6 @@ use constant ADS_USE_ENCRYPTION => 0x2;
 use constant ADS_USE_SEALING => 0x80;
 use constant ADS_USE_SIGNING => 0x40;
 use constant ADS_USE_SSL => 0x2;
+use constant adModeReadWrite => 3;
 
 1;

@@ -13,7 +13,7 @@ Common Errors
   Desc: (see readment4.txt if you use NT4 to communicate with your exchange servers,
         but check the obvious...  did someone turn your server off?
 0x800708ad - The user name could not be found
-  Desc:  self explanatory...
+  Desc:  We couldn't find the username that you have tried to query...
 0x80072021 - A Protocol Error occurred
   Desc: Chances are that you've tried to set an invalid value
 0x80005000 - Invalid AD Path

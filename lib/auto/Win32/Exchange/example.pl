@@ -22,7 +22,7 @@ if (!Win32::Exchange::GetVersion($info_store_server,\%ver) ) {
 print "version      = $ver{ver}\n";
 print "build        = $ver{build}\n";
 print "service pack = $ver{sp}\n";
-if (!($provider = Win32::Exchange::Mailbox->new($ver{'ver'}))) {
+if (!($provider = Win32::Exchange->new($ver{'ver'}))) {
   die "$rtn - Error returning into main from new ($Win32::Exchange::VERSION)\n";
 }
 
@@ -36,7 +36,6 @@ if ($ver{ver} eq "5.5") {
     exit 1;
   }
   print "GetLDAPPath succeeded\n";
-  
   if ($mailbox = $provider->GetMailbox($info_store_server,$mailbox_alias_name,$org,$ou)) {
     print "Mailbox already existed\n";
     if ($mailbox->SetOwner("$domain\\$mailbox_alias_name")) {
@@ -64,17 +63,6 @@ if ($ver{ver} eq "5.5") {
       print "GetOwner failed\n";  
     }
 
-    $mailbox->GetPerms(\@array);
-    
-    foreach my $acl (@array) {
-      print "   trustee - $acl->{Trustee}\n";  
-      print "accessmask - $acl->{AccessMask}\n";  
-      print "   acetype - $acl->{AceType}\n";  
-      print "  aceflags - $acl->{AceFlags}\n";  
-      print "     flags - $acl->{Flags}\n";  
-      print "   objtype - $acl->{ObjectType}\n";  
-      print "inhobjtype - $acl->{InheritedObjectType}\n";  
-    }
 
     if ($mailbox->SetPerms(\@PermsUsers)) {
       print "Successfully set perms\n";  
@@ -88,14 +76,14 @@ if ($ver{ver} eq "5.5") {
   $Exchange_Info{'givenName'}="This";
   $Exchange_Info{'sn'}="Isatest";
   $Exchange_Info{'cn'}=$mailbox_full_name;
-  $Exchange_Info{'mail'}="$mailbox_alias_name\@manross.net";
-  $Exchange_Info{'rfc822Mailbox'}="$mailbox_alias_name\@manross.net"; 
+  $Exchange_Info{'mail'}="$mailbox_alias_name\@insight.com";
+  $Exchange_Info{'rfc822Mailbox'}="$mailbox_alias_name\@insight.com"; 
   #You can add any attributes to this hash that you can set via exchange for a mailbox
 
   #$rfax="RFAX:$Exchange_Info{'cn'}\@"; #this can set the Rightfax SMTP name for Exchange-enabled Rightfax mail delivery
   #push (@$Other_MBX,$rfax);
 
-  $smtp="smtp:another_name_to_send_to\@manross.net"; 
+  $smtp="smtp:another_name_to_send_to\@insight.com"; 
   push (@$Other_MBX,$smtp);
   #be careful with 'otherMailbox'es..  You are deleting any addresses that may exist already
   #if you set them via 'otherMailbox' and don't get them first (you are now forewarned).
