@@ -1,5 +1,6 @@
 Version History
 ------------------------
+2002/08/22 - 0.0.0.022a  OOPS, the CreateMailbox change didn't get put into 022.  Fixed.
 2002/08/22 - 0.0.0.022   Added minimal testing (mswin32new.t), hopefully excluding me from more nastygrams. :(
                          Changed the behavior of "new" to allow for ->new(...) and ::new(...)
                          fixed some strict errors, and syntactical issues.  OOPS.

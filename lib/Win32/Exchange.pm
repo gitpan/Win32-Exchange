@@ -662,6 +662,7 @@ sub _E2KCreateMailbox {
   my $mail_domain;
   my $storage_group;
   my $mb_store;
+  my $mailbox_ldap_path;
   if (scalar(@_) >4) {
     $provider = $_[0];
     $info_store_server = $_[1];
@@ -669,9 +670,11 @@ sub _E2KCreateMailbox {
     $mailbox_alias_name = $_[3];
     if (scalar(@_) == 5) {
       #placeholder..
+    if (scalar(@_) == 6) {
+      $mailbox_ldap_path = $_[5]
     } elsif (scalar(@_) == 7) {
-      $storage_group = $_[4];
-      $mb_store = $_[5];
+      $storage_group = $_[5];
+      $mb_store = $_[6];
     } else {
       _ReportArgError("CreateMailbox [E2K] (".scalar(@_));
       return 0;
@@ -686,15 +689,15 @@ sub _E2KCreateMailbox {
   } else {
     $pdc = $nt_pdc;
   }
-
+ 
   my $user_dist_name;
   if (!AdodbSearch($pdc,"(samAccountName=$mailbox_alias_name)","samAccountName,distinguishedName",$user_dist_name)) {
     _DebugComment("Error querying distinguished name for user in CreateMailbox (E2K)\n");
     return 0;
   }
-
+ 
   #_DebugComment("user_dist_name = $user_dist_name\n");  
-
+ 
   bless $provider,"Win32::OLE";
   my $user_account = $provider->DataSource->Open("LDAP://$pdc/$user_dist_name");
   if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
@@ -711,23 +714,19 @@ sub _E2KCreateMailbox {
     bless $provider,"Win32::Exchange";
     return 0;
   }
-  my $mailbox_ldap_path = "";
-  if (!LocateMailboxStore($info_store_server,$storage_group,$mb_store,$mailbox_ldap_path)) {
-    return 0;
+  if ($mailbox_ldap_path eq "") {
+    if (!LocateMailboxStore($info_store_server,$storage_group,$mb_store,$mailbox_ldap_path)) {
+      return 0;
+    }
   }
   _DebugComment("$mailbox_ldap_path\n");
-  my $user_display_name;
-  if (!AdodbSearch($pdc,"(samAccountName=$mailbox_alias_name)","samAccountName,displayName",$user_display_name)) {
-    _DebugComment("Error querying distinguished name for user\n");
-    return 0;
-  }
   $info_store->CreateMailbox($mailbox_ldap_path);
   if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
     _DebugComment("Failed creating mailbox for $mailbox_alias_name ($error_num) $error_name\n");
     bless $provider,"Win32::Exchange";
     return 0;
   }
-
+ 
   # SP2 Fix for perms issue could eventually be a problem:
   #   oObject.DataSource.Open strSourceURL, , adModeReadWrite
   #   http://support.microsoft.com/default.aspx?scid=kb;EN-US;q321039
