@@ -101,16 +101,21 @@ All methods return 0 on failure and 1 for success unless otherwise noted.<BR>
 <P>
 <H2><A NAME="functions">Functions</A></H2>
 <DL>
-<DT><STRONG><A NAME="function_new">$provider = Win32::Exchange->new($server_name,[ $version]);</A></STRONG><BR>
-<DT><STRONG><A NAME="function_neu">$provider = Win32::Exchange::new($server_name,[ $version]);</A></STRONG><BR>
+<DT><STRONG><A NAME="function_new">$provider = Win32::Exchange-&gt;new($server_name | $version);</A></STRONG><BR>
+<DT><STRONG><A NAME="function_neu">$provider = Win32::Exchange::new($server_name | $version);</A></STRONG><BR>
 <DD>
 The <A HREF="#item_new"><CODE>new()</CODE></A> class method starts a new instance of an Exchange provider object.
-It returns a reference to this object or 0 if the creation fails.
-The SERVER_NAME argument must not be prepended with backslashes. The optional VERSION argument can be 5.5 or
-6.0.<BR>
+It returns a reference to this object or <B>undef</B> if the creation fails.<BR>
 <BR>
-5.5 would create a Win32::OLE object of type AdsNamespaces for use with Exchange 5.5<BR>
-6.0 would create a Win32::OLE object of type CDO.Person for use with Exchange 2000.<BR>
+<UL>
+  <LI>You can send a server name or a version number</LI>
+  <LI>If used, $version must equal 5.5 or 6.0.</LI>
+  <UL>
+    <LI>5.5 would create a Win32::OLE object of type AdsNamespaces for use with Exchange 5.5</LI>
+    <LI>6.0 would create a Win32::OLE object of type CDO.Person for use with Exchange 2000</LI>
+  </UL>
+  <LI>If used, $server_name must NOT be prepended with backslashed</LI>
+</UL>
 <BR>
 <A HREF="#function_GetVersion"><B>GetVersion</B></A> can return an acceptable version number for your Exchange server.
 <P></P>
@@ -193,15 +198,18 @@ Exchange 2000 is an NT User account, and you have to query the Interface on the 
   #Exchange 5.5 only<BR>
 <BR>
 <BR>
-<DT><STRONG><A NAME="function_GetVersion">Win32::Exchange::<CODE>GetVersion($server_name,\%version)</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function_GetVersion">Win32::Exchange::<CODE>GetVersion($server_name,\%version);</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function_GetVersion">Win32::Exchange-&gt;<CODE>GetVersion($server_name,\%version);</CODE></A></STRONG><BR>
 <DD>
 This function returns a HASH of version information in the form of:<BR>
 <BR>
-ver=5.5<BR>
-build=2653.23<BR>
-sp=4<BR>
+<UL>
+<LI>ver=5.5</LI>
+<LI>build=2653.23</LI>
+<LI>sp=4</LI>
+</UL>
 <BR>
-  if (!Win32::Exchange::GetVersion($info_store_server,\%ver)) {<BR>
+  if (!Win32::Exchange->GetVersion($info_store_server,\%ver)) {<BR>
     die "$rtn - Error returning from GetVersion\n";<BR>
   }<BR>
 <BR>
@@ -210,7 +218,8 @@ sp=4<BR>
   print "service pack = $ver{sp}\n";<BR>
 <BR>
 <P></P>
-<DT><STRONG><A NAME="function_LocateMailboxStore">$provider-&gt;<CODE>LocateMailboxStore($info_store_server,$storage_group,$mailbox_store,$store_name,[\@counts])</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function_LocateMailboxStore">Win32::Exchange-&gt;<CODE>LocateMailboxStore($info_store_server,$storage_group,$mailbox_store,$store_name,[\@counts]);</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function_LocateMailboxStore">Win32::Exchange::<CODE>LocateMailboxStore($info_store_server,$storage_group,$mailbox_store,$store_name,[\@counts]);</CODE></A></STRONG><BR>
 <DD>
 This method allows you to query the Exchange 2000 server to determine:<BR>
 <UL>
@@ -284,7 +293,7 @@ Exchange 2000:<BR>
     <A HREF="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/wss/wss/_cdo_recipient_management_interfaces.asp">Interfaces and attributes</A><BR>
 <BR>
 <BR>
-<DT><STRONG><A NAME="function_SetOwner">$mailbox-&gt;SetOwner($user)</A></STRONG><BR>
+<DT><STRONG><A NAME="function_SetOwner">$mailbox-&gt;SetOwner($user);</A></STRONG><BR>
 <DD>
 The <A HREF="#function_SetOwner"><CODE>SetOwner()</CODE></A> method takes a string reference
 (ex. "DOMAIN\USERNAME") and is currently only applicable for use in setting the owner on
@@ -293,7 +302,7 @@ Exchange 5.5 mailboxes.<BR>
   $mailbox->SetPerms(&quotDOMAIN\username&quot) || print 'Error setting owner\n'<BR>
 <BR>
 <BR>
-<DT><STRONG><A NAME="function_SetPerms">$mailbox-&gt;SetPerms(\@USERS)</A></STRONG><BR>
+<DT><STRONG><A NAME="function_SetPerms">$mailbox-&gt;SetPerms(\@users);</A></STRONG><BR>
 <DD>
 The <A HREF="#function_SetPerms"><CODE>SetPerms()</CODE></A> method takes an array reference of user or
 group names, and is currently only applicable for use in setting permissions on Exchange 5.5 mailboxes.<BR>

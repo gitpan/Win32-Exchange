@@ -26,7 +26,7 @@ Win32::OLE->Initialize(Win32::OLE::COINIT_OLEINITIALIZE);
 #Win32::OLE->Option('_Unique' => 1);
 #@ISA = qw(Win32::OLE);
 
-my $VERSION = "0.0.0.021";
+my $VERSION = "0.0.0.023";
 my $DEBUG = 1;
 
 #CONSTANTS
@@ -58,27 +58,40 @@ my $ADS_SERVER_BIND            = 0x200;  #
 
 sub new {
   my $server;
-  my $ver;
-  my %version;
+  my $ver = "";
   if (scalar(@_) == 1) {
-    $server = $_[0];
+    if ($_[0] eq "5.5" || $_[0] eq "6.0") {
+      $ver = $_[0];
+    } else {
+      $server = $_[0];
+    }
   } elsif (scalar(@_) == 2) {
-    $server = $_[0];
-    $ver = $_[1];
+    if ($_[0] eq "Win32::Exchange") {
+      if ($_[1] eq "5.5" || $_[1] eq "6.0") {
+        $ver = $_[1];
+      } else {
+        $server = $_[1];
+      }
+
+    } else {
+      _ReportArgError("new",scalar(@_));
+    }
   } else {
     _ReportArgError("new",scalar(@_));
     return 0;
   }
+
   my $class = "Win32::Exchange";
   my $ldap_provider = {};
-  if (scalar(@_) == 1) {
+
+  if ($ver eq "") {
+    my %version;
     if (!Win32::Exchange::GetVersion($server,\%version)) {
       return undef;
     } else {
       $ver = $version{'ver'}
     }
-  }
-  if ($ver eq "5.5") {
+  } elsif ($ver eq "5.5") {
     #Exchange 5.5
     if ($ldap_provider = Win32::OLE->new('ADsNamespaces')) {
       return bless $ldap_provider,$class;
@@ -95,7 +108,7 @@ sub new {
       return undef;
     }
   } else {
-    _DebugComment("ver not right\n");
+    _DebugComment("Unable to verify version information for version: $ver\n");
     return undef;
   }
 }
@@ -151,7 +164,12 @@ sub GetVersion {
   if (scalar(@_) == 2) {
     $server_name = $_[0];
   } elsif (scalar(@_) == 3) {
-    $server_name = $_[1];
+    if ($_[0] eq "Win32::Exchange") {
+      $server_name = $_[1];
+    } else {
+      _DebugComment("Error encountered processing arguments (3 args were passed)\n");
+      return 0;
+    }
   } else {
     _ReportArgError("GetVersion",scalar(@_));
     return 0;
@@ -395,23 +413,44 @@ sub LocateMailboxStore {
   my $storage_group;
   my $mb_store;
   my $count = "no";
-  if (scalar(@_) > 3) {
-    if (scalar(@_) == 4) {
-    } elsif (scalar(@_) == 5) {
-      if (ref($_[4]) eq "ARRAY") {
-        $count = "yes";
+  if ($_[0] eq "Win32::Exchange") {
+    if (scalar(@_) > 4) {
+      if (scalar(@_) == 5) {
+      } elsif (scalar(@_) == 6) {
+        if (ref($_[5]) eq "ARRAY") {
+          $count = "yes";
+        } else {
+          _DebugComment("the fifth argument passed to LocateMailboxStore must be an array (but is optional).\n");
+          return 0;  
+        }
       } else {
-        _DebugComment("the fifth argument passed to LocateMailboxStore must be an array (but is optional).\n");
-        return 0;  
-      }
+        _ReportArgError("LocateMailboxStore [E2K] (".scalar(@_));
+       return 0;  
+       }
     } else {
       _ReportArgError("LocateMailboxStore [E2K] (".scalar(@_));
       return 0;  
     }
   } else {
-    _ReportArgError("LocateMailboxStore [E2K] (".scalar(@_));
-    return 0;  
+    if (scalar(@_) > 3) {
+      if (scalar(@_) == 4) {
+      } elsif (scalar(@_) == 5) {
+        if (ref($_[4]) eq "ARRAY") {
+          $count = "yes";
+        } else {
+          _DebugComment("the fifth argument passed to LocateMailboxStore must be an array (but is optional).\n");
+          return 0;  
+        }
+      } else {
+        _ReportArgError("LocateMailboxStore [E2K] (".scalar(@_));
+       return 0;  
+       }
+    } else {
+      _ReportArgError("LocateMailboxStore [E2K] (".scalar(@_));
+      return 0;  
+    }
   }
+  
   my $ldap_path;
   my $mb_count;
   my %storage_groups;
@@ -484,7 +523,7 @@ sub _TraverseStorageGroups {
     _ReportArgError("_TraverseStorageGroups [E2K] (".scalar(@_));
     return 0;
   }
-  if (ref(@_[0]) ne "HASH") {
+  if (ref($_[0]) ne "HASH") {
     _DebugComment("Storage group object is not a hash\n");
     return 0;
   }
@@ -756,7 +795,7 @@ sub GetDistinguishedName {
   }
   my %filters;
   
-  %filters ('Home-MDB' => "(objectClass=MHS-Message-Store)",
+  %filters = ('Home-MDB' => "(objectClass=MHS-Message-Store)",
             'Home-MTA' => "(objectClass=MTA)",
            );
   if (defined($filters{$filter})) {
