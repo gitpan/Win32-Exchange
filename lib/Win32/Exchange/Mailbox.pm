@@ -28,7 +28,7 @@ Win32::OLE->Option('_Unique' => 1);
 #@ISA = qw(Win32::OLE);
 
 my $Version;
-my $VERSION = $Version = "0.042";
+my $VERSION = $Version = "0.045";
 my $DEBUG = 1;
 
 sub new {
@@ -377,7 +377,9 @@ sub _E55DeleteMailbox {
   my $exch_mb_dn;
   my $path;
 
-  my $ldap_provider = $provider->{ad_provider};
+  #my $ldap_provider = $provider->{ad_provider};#changed on 20040401 for delete issues (Protocol error)
+  #need fresh object
+  my $ldap_provider = Win32::OLE->new('ADsNamespaces');
   
   my $Recipients = $provider->GetMailboxContainer($mailbox_alias_name);
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
@@ -390,7 +392,7 @@ sub _E55DeleteMailbox {
   
   $Recipients->Delete("organizationalPerson", "cn=$mailbox_alias_name");
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("Unable to Get the mailbox object where the rdn == $mailbox_alias_name on $information_store_server ($error_num)\n",1);
+    _DebugComment("Unable to Delete the mailbox object where the cn == $mailbox_alias_name on $information_store_server ($error_num)\n",1);
     $Win32::OLE::Warn=$original_ole_warn_value;
     return 0;
   }
@@ -409,7 +411,7 @@ sub GetMailboxContainer {
     Win32::Exchange::_DebugComment("Not a valid Function E2K (GetMailboxContainer)\n",1);
     return 0;
   } else {
-    if ($mbx_container = _E55GetMailboxContainer(@_)) {
+    if ($mbx_container = $provider->_E55GetMailboxContainer($_[1])) {
       return $mbx_container;
     }
   }
@@ -435,7 +437,7 @@ sub _E55GetMailboxContainer {
   my $recipients_path;
   my $exch_mb_dn;
   my $path;
-  if (Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$information_store_server","(&(objectClass=organizationalPerson)(rdn=$mailbox_alias_name))","rdn,distinguishedName",1,$exch_mb_dn)) {
+  if (Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$information_store_server","(&(objectClass=organizationalPerson)(cn=$mailbox_alias_name))","cn,distinguishedName",1,$exch_mb_dn)) {
     Win32::Exchange::_DebugComment("Exchange recipients path for mailbox found on the server\n".
                                    "    $exch_mb_dn\n",1);
     
@@ -447,7 +449,10 @@ sub _E55GetMailboxContainer {
     return 0;
   }
   
-  my $ldap_provider = $provider->{ad_provider};
+  #my $ldap_provider = $provider->{ad_provider};#changed on 20040401 for delete issues (Protocol error)
+  #need fresh object
+  my $ldap_provider = Win32::OLE->new('ADsNamespaces');
+
   my $Recipients = $ldap_provider->GetObject("",$recipients_path);
   if (!Win32::Exchange::ErrorCheck("0x00000000",$error_num,$error_name)) {
     Win32::Exchange::_DebugComment("Failed opening recipients path on $information_store_server\n",1);
@@ -514,23 +519,18 @@ sub _E55GetMailbox {
     _DebugComment("Error locating Exchange Mailbox on the server.\n",1);
     return 0;
   }
-
   my $ldap_provider = $provider->{ad_provider};
-  my $Recipients = $provider->GetObject("",$recipients_path);
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("Failed opening recipients path on $information_store_server\n",1);
-    return 0;
-  }
 
   my $original_ole_warn_value = $Win32::OLE::Warn;
   $Win32::OLE::Warn = 0; #Turn STDERR warnings off because we probably are going to get an error (0x80072030)
 
-  my $mailbox = $Recipients->GetObject("organizationalPerson", "cn=$mailbox_alias_name");
+  my $mailbox = $ldap_provider->GetObject("",$recipients_path);
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("Unable to Get the mailbox object where the rdn == $mailbox_alias_name on $information_store_server ($error_num)\n",1);
     $Win32::OLE::Warn=$original_ole_warn_value;
     return 0;
   }
+
   $Win32::OLE::Warn=$original_ole_warn_value;
   $provider->{ad_provider} = $mailbox;
   return $provider;
@@ -618,7 +618,7 @@ sub GetUserObject {
 }
 
 
-sub _E2KIsMapiAware {
+sub _E2KIsMailAware {
   #added provider
   #removed nt_dc
   my $provider;
@@ -630,16 +630,16 @@ sub _E2KIsMapiAware {
     $nt_dc = $provider->{dc};
     $mailbox_alias_name = $_[1];
   } else {
-    _ReportArgError("IsMapiAware [E2K]",scalar(@_));
+    _ReportArgError("IsMailAware [E2K]",scalar(@_));
     return 0;
   }
   Win32::Exchange::_StripBackslashes ($nt_dc,$dc); #probably not needed but leaving it in anyway
   
-  my $mapi_recip;
-  if (Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$dc","(&(samAccountName=$mailbox_alias_name)(mapirecipient=*))","samAccountName,mapirecipient",$mapi_recip)) {
-    _DebugComment("This is not a MapiAware user account -- IsMapiAware (E2K)\n",3);
+  my $user_dist_name;
+  if (Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$dc","(&(samAccountName=$mailbox_alias_name)(showinaddressbook=*))","samAccountName,distinguishedName",$user_dist_name)) {
     return 1;
   } else {
+    _DebugComment("This is not a Mail aware user account -- IsMailAware (E2K)\n",3);
     return 0;
   }
 }
@@ -661,8 +661,9 @@ sub _E2KIsMailboxEnabled {
   }
   Win32::Exchange::_StripBackslashes ($nt_dc,$dc); #probably not needed but leaving it in anyway
   
+  print $mailbox_alias_name."\n";
   my $user_dist_name;
-  if (Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$dc","(samAccountName=$mailbox_alias_name)(mapirecipient=TRUE)","samAccountName,distinguishedName",$user_dist_name)) {
+  if (Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$dc","(&(samAccountName=$mailbox_alias_name)(showinaddressbook=*)(msExchHomeServerName=*))","samAccountName,distinguishedName",$user_dist_name)) {
     return 1;
   } else {
     _DebugComment("This is not a MailboxEnabled user account -- IsMailboxEnabled (E2K)\n",3);
@@ -688,11 +689,15 @@ sub _E2KIsMailEnabled {
   Win32::Exchange::_StripBackslashes ($nt_dc,$dc); #probably not needed but leaving it in anyway
   
   my $user_dist_name;
-  if (Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$dc","(samAccountName=$mailbox_alias_name)(mapirecipient=FALSE)","samAccountName,distinguishedName",$user_dist_name)) {
-    return 1;
+  if (Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$dc","(&(samAccountName=$mailbox_alias_name)(showinaddressbook=*))","samAccountName,distinguishedName",$user_dist_name)) {
+    if (Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$dc","(&(samAccountName=$mailbox_alias_name)(msExchHomeServerName=*))","samAccountName,distinguishedName",$user_dist_name)) {
+      return 0;  #mailboxenabled.
+    } else {
+      return 1; #mailenabled (no home server)
+    }
   } else {
-    _DebugComment("This is not a MailboxEnabled user account -- IsMailboxEnabled (E2K)\n",3);
-    return 0;
+    _DebugComment("This is not a MailEnabled user account -- IsMailEnabled (E2K)\n",3);
+    return 0; #not even a valid addressable user
   }
 }
 
@@ -1586,8 +1591,9 @@ sub _E55AddDLMembers {
     $exch_dl_path = "LDAP://$server_name/$exch_dl_name";
     $exch_dl_dn = $exch_dl_name;
   } else {
+    $find_dl = 1; #hard-coding this for now -- searching guarantees the object path (if it exists somewhere)
     if ($find_dl == 1) {
-      if (Win32::Exchange::_AdodbExtendedSearch($exch_dl_name,"LDAP://$server_name","(&(objectClass=groupOfNames)(cn=$exch_dl_name))","cn,distinguishedName",$exch_dl_dn)) {
+      if (Win32::Exchange::_AdodbExtendedSearch($exch_dl_name,"LDAP://$server_name","(&(objectClass=groupOfNames)(uid=$exch_dl_name))","uid,distinguishedName",$exch_dl_dn)) {
         $exch_dl_path = "LDAP://$server_name/$exch_dl_dn";
       } else {
         _DebugComment("Error locating Exchange DL on the server.  Member addition cannot proceed.\n",1);
@@ -1630,7 +1636,7 @@ sub _E55AddDLMembers {
     if ($username =~ /^cn=.*ou=.*o=.*$/) {
       $exch_mb_dn = $username;
     } else {
-      if (!Win32::Exchange::_AdodbExtendedSearch($username,"LDAP://$server_name","(&(objectClass=organizationalPerson)(rdn=$username))","rdn,distinguishedName",$exch_mb_dn)) {
+      if (!Win32::Exchange::_AdodbExtendedSearch($username,"LDAP://$server_name","(&(objectClass=organizationalPerson)(uid=$username))","uid,distinguishedName",$exch_mb_dn)) {
         _DebugComment("Error locating Exchange mailbox on the server.  Member addition cannot proceed.\n",1);
         return 0;
       }

@@ -1,8 +1,38 @@
 Version History
 ------------------------
-2003/11/11 -     0.042   -Major rewrite of Exchange.pm and Mailbox.pm.  Changed a lot of functions to a new style (more stream-lined process) in Mailbox.pm.
+2004/04/22 -     0.045   -Corrected AddDLMembers for E55 in the uid for the dlname and the mailbox name for the ADODB search.
+                         -Hard-coded $find_dl = 1
+                         -WooHoo, I have an E55 test server again!
+
+                            --Win32::Exchange ver 0.041
+                            --Win32::Exchange::Mailbox ver 0.045
+                            --Win32::Exchange::Const
+                            --Win32::Exchange::SMTP::Security ver 0.003
+                         
+2004/04/01 -     0.044   -Not an April Fools joke..  :)
+                         -Fixed  _E55DeleteMailbox and _E55GetMailboxContainer bug reporting a protocol error when trying to delete a mailbox
+                             -- Thanks, Sean Scott
+
+                            --Win32::Exchange ver 0.041
+                            --Win32::Exchange::Mailbox ver 0.044
+                            --Win32::Exchange::Const
+                            --Win32::Exchange::SMTP::Security ver 0.003
+
+2004/02/07 -     0.043   -Fixed 042 E5.5 bug in _E55GetMailbox where I specified the wrong object ($provider s/b $ldap_provider) -- Thanks, Rob Laltrello
+                         -Fixed GetMailbox bug where I was trying to connect to an object (thinking it was the recipients container), and then from there connect to a mailbox.
+                            --when in actuality, I had the mailbox in the first GetObject call.   -- Thanks, Rob Laltrello
+                         -I really need to reinstall Exchange 5.5 somewhere as a test server!
+                         -Updated IsMailboxEnabled, IsMailEnabled, and IsMailAware to not use mapirecipient and use "showinaddressbook" and "msExchHomeServerName"
+                           -I think this will work a lot better.
+
+                            --Win32::Exchange ver 0.041
+                            --Win32::Exchange::Mailbox ver 0.043
+                            --Win32::Exchange::Const
+                            --Win32::Exchange::SMTP::Security ver 0.003
+
+2003/11/22 -     0.042   -Major rewrite of Exchange.pm and Mailbox.pm.  Changed a lot of functions to a new style (more stream-lined process) in Mailbox.pm.
                          -major changed include:
-                             -Possible fix when User created in the same running as this script (avoids replication latency)..
+                             -Possible fix when User created in the same running as this script (avoids replication latency, hopefully)..
                                -This will require some of work from the user though.
                                 Namely, I now (think I) know what DC an Exchange 2000/2003 server is requesting authentication from, and this will require
                                   that this script create the user on this DC.
@@ -17,6 +47,8 @@ Version History
                          -added GetMailboxContainer back in -- seems it was lost for over a year and no one complained (E55) in Mailbox.pm.  WOW.
                          -changed the Main subs to correctly send E2K/E2K03 (version 6.0 and 6.5) requests to the E2K routine
                          -added IsMixedModeExchangeOrg (tells you if you are a mixed or native Exchange org (whether or not you support E55).
+                         -Changed most of the lookups for the Mailbox functions like GetMailbox to check on the CN, and not the RDN.
+                             -It seems that they aren't always the same.....  Just ask David Leask  :)
                             --Win32::Exchange ver 0.041
                             --Win32::Exchange::Mailbox ver 0.042
                             --Win32::Exchange::Const

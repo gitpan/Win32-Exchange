@@ -191,7 +191,7 @@ If you don't specify a container, Win32::Exchange::Mailbox will try to create yo
 <BR>
 <DT><STRONG><A NAME="function_DeleteMailbox"></A></STRONG><BR>
 <DT><STRONG><A NAME="function__E2KDeleteMailbox">$mailbox-&gt;<CODE>DeleteMailbox();#E2K</CODE></A></STRONG><BR>
-<DT><STRONG><A NAME="function__E2KDeleteMailbox">$provider-&gt;<CODE>DeleteMailbox($mailbox_name,);#E55</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function__E55DeleteMailbox">$provider-&gt;<CODE>DeleteMailbox($mailbox_name,);#E55</CODE></A></STRONG><BR>
 <DD>
 The <A HREF="#function_DeleteMailbox"><CODE>DeleteMailbox()</CODE></A> function is implemented for Exchange 5.5 and 2000.<BR>
 <BR>
@@ -222,6 +222,12 @@ sub e55 {<BR>
     print "Mailbox deletion failed.\n";<BR>
   }<BR>
 }<BR>
+<BR>
+<B>Note:</B> The Exchange 5.5 version of DeleteMailbox is using ADSI and is subject to the problem described in <A HREF="http://support.microsoft.com/default.aspx?scid=kb;en-us;252988" target="_blank">this</A>
+article, entitled "Using ADSI/LDAP API to Delete Exchange 5.5 Mailbox Orphans Mailbox Resources (284199)"<BR>
+<BR>
+Ultimately, the delete is successful, but the mailbox resources are available to any newly created directory object of the same cn/uid.  This is not an ideal situation, but the alternative involves C code, and I do
+not have the talents to create a DAPI C interface for use by perl modules, and rely on COM objects which are easily manipulatable by perl, and a substandard interface is revealed.  Sorry.<BR>
 <BR>
 <BR>
 
@@ -726,7 +732,7 @@ I'd like to extend thanks to the following:<BR>
 <P>Please send questions, comments or suggestions about this module to Steven Manross &lt;<A HREF="mailto:steven@manross.net">steven@manross.net</A>&gt.</P>
 <HR>
 <H1><A NAME="version">VERSION</A></H1>
-<P>Version 0.042     November 11, 2003</P>
+<P>Version 0.045     April 26, 2004</P>
 <H1><A NAME="copyright">Copyright</A></H1>
 Microsoft, Active Directory, ADSI, Windows, Windows NT, MSDN, and Exchange are either registered trademarks or trademarks of Microsoft Corporation in the United States and/or other countries.<BR>
 <BR>
