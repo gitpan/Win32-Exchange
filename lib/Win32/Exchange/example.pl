@@ -57,6 +57,11 @@ if ($ver{ver} eq "5.5") {
     } else {
       print "SetOwner failed\n";  
     }
+    if ($mailbox->GetOwner($nt_user,0x2)) {
+      print "GetOwner worked: owner = $nt_user\n";  
+    } else {
+      print "GetOwner failed\n";  
+    }
 
 
     if ($mailbox->SetPerms(\@PermsUsers)) {

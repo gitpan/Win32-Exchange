@@ -1,15 +1,16 @@
 Version History
 ------------------------
+2002/09/11 -     0.028   -Added GetOwner (5.5 only).
+                         -Updated HTML docs to include reference to GetMailbox being a E2K friendly function.
 2002/08/29 -     0.027   -Changed the function of DebugComment, to allow for severity of an impending print statement.
                          -Fixed a couple Exchange 5.5 bugs (they've probably been there about 10 revisions)...
                             -But I just tested the Exchange 5.5 stuff here at work.
                             -One of the fixes was to change fuzzy to allow the search to be performed on either of the 2 columns...
                                 -This was breaking GetDistinguishedName because GetDistinguishedName needs to search the second
                                  attribute.
-                         -Having issues with _E2KCreateMailbox, but I think it's a problem on my E2K dev box.  I'll look at it later.
 2002/08/27 -     0.026   -Added Distribution Lists for E2K WITH A PASSION!
                          -reworked a lot of the blesses (to wait to bless until returning from "SetPerms","CreateMaibox", etc.)
-                         -made minor changes to _Errorcheck..  don't pass Win32::OLE->LastError() anymore.. (it looks at is itself)
+                         -made minor changes to _Errorcheck..  don't pass Win32::OLE->LastError() anymore.. (it looks at it itself)
 2002/08/26 -     0.025   Re-implemented _E2KGetMailbox (for reasons stated in 0.024)
                          Revised versioning scheme to pull out the 0.0 and just go with 0.025
                          Found a need to handle internal error-checking (Win32::Exchange->LastError())

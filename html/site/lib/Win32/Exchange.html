@@ -198,16 +198,28 @@ eventually create a mailbox) as provided by <A HREF="#function_LocateMailboxStor
 <DT><STRONG><A NAME="function_GetMailbox"></A></STRONG><BR>
 <DT><STRONG><A NAME="function__E55GetMailbox">$provider-&gt;<CODE>GetMailbox($server_name,$mailbox_name,[$org,$ou]);</CODE></A></STRONG><BR>
 <DD>
-The <A HREF="#function_GetMailbox"><CODE>GetMailbox()</CODE></A> function is only implemented for Exchange 5.5.
-It didn't seem to make sense to have GetMailbox for Exchange 2000, but since <A HREF="#function_SetPerms">SetPerms</A>,
-<A HREF="#function_SetAttributes">SetAttributes</A> and possibly other functions will rely on this base object
-(CDO.Person), I'll look at reimplementing it soon...
+The <A HREF="#function_GetMailbox"><CODE>GetMailbox()</CODE></A> function is implemented for Exchange 5.5 and 2000.<BR>
+<BR>
+The base object that is returned for Exchange 2000 mailboxes is the LDAP user object, and the object that is returned for Exchange 5.5 is
+the 5.5 mailbox object.<BR>
 <BR>
   $mailbox = $provider->GetMailbox($info_store_server,$mailbox_alias_name,$org,$ou);<BR>
   if ($mailbox) {<BR>
     print "Mailbox exists\n";<BR>
   }<BR>
-  #Exchange 5.5 only<BR>
+
+<BR>
+<BR>
+<DT><STRONG><A NAME="function_GetOwner">$mailbox-&gt;GetOwner($nt_user,[$sid_type]);#Exchange 5.5</A></STRONG><BR>
+<DD>
+The <A HREF="#function_GetOwner"><CODE>GetOwner()</CODE></A> method takes an Exchange 5.5 mailbox object like one provided by
+<A HREF="#function_GetMailbox"><CODE>GetMailbox()</CODE></A> or <A HREF="#function_CreateMailbox"><CODE>CreateMailbox()</CODE></A>
+along with a variable to store the results in, and an optional "SID type", in order for the function to return a string type of
+your choosing.<BR>
+<BR>
+This function defaults to ADS_SID_WINNT_PATH if no sid_type is specified.  I don't believe there is an E2K equivelant.<BR>
+<BR>
+$mailbox->GetOwner($nt_user,0x2) || print 'Error getting owner\n'; #0x2 == ADS_SID_SAM<BR>
 <BR>
 <BR>
 <DT><STRONG><A NAME="function_GetVersion">Win32::Exchange::<CODE>GetVersion($server_name,\%version);</CODE></A></STRONG><BR>
@@ -529,7 +541,7 @@ I'd like to extend thanks to the following:<BR>
 <P>Please send questions, comments or suggestions about this module to Steven Manross &lt;<A HREF="mailto:steven@manross.net">steven@manross.net</A>&gt.</P>
 <HR>
 <H1><A NAME="version">VERSION</A></H1>
-<P>Version 0.0.0.027     August 29, 2002</P>
+<P>Version 0.0.0.028     September 11, 2002</P>
 <H1><A NAME="copyright">Copyright</A></H1>
 Microsoft, Active Directory, ADSI, Windows, Windows NT, MSDN, and Exchange are either registered trademarks or trademarks of Microsoft Corporation in the United States and/or other countries.<BR>
 <BR>

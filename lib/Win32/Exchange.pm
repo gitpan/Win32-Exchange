@@ -18,7 +18,7 @@
 package Win32::Exchange;
 
 use strict;
-#use vars qw ($VERSION $DEBUG);
+use vars qw ($VERSION $Version $DEBUG);
 
 use Win32::OLE;
 Win32::OLE->Initialize(Win32::OLE::COINIT_OLEINITIALIZE);
@@ -26,14 +26,21 @@ Win32::OLE->Initialize(Win32::OLE::COINIT_OLEINITIALIZE);
 #Win32::OLE->Option('_Unique' => 1);
 #@ISA = qw(Win32::OLE);
 
-my $VERSION = "0.027";
+my $Version;
+my $VERSION = $Version = "0.028";
 my $DEBUG = 1;
 
 #CONSTANTS
 
 ###Various ADS Objects used in Mailbox Creation ##
-my $ADS_SID_HEXSTRING = 0x01;                    #
-my $ADS_SID_WINNT_PATH = 0x05;                   # 
+my $ADS_SID_RAW = 0x0;                           #
+my $ADS_SID_HEXSTRING = 0x1;                     #
+my $ADS_SID_SAM = 0x2;                           #
+my $ADS_SID_UPN = 0x3;                           #
+my $ADS_SID_SDDL = 0x4;                          #
+my $ADS_SID_WINNT_PATH = 0x5;                    #
+my $ADS_SID_ACTIVE_DIRECTORY_PATH = 0x6;         #
+my $ADS_SID_SID_BINDING = 0x7;                   #
 my $ADS_RIGHT_EXCH_MODIFY_USER_ATT = 0x02;       # 
 my $ADS_RIGHT_EXCH_MAIL_SEND_AS = 0x08;          #
 my $ADS_RIGHT_EXCH_MAIL_RECEIVE_AS = 0x10;       #
@@ -609,14 +616,12 @@ sub CreateMailbox {
     #IPerson returns for CDO.Person (E2K)
     if ($mbx = _E2KCreateMailbox(@_)) {
       bless $provider,"Win32::Exchange";
-      bless $mbx,"Win32::Exchange";
       return $mbx;
     }
   } else {
     #nothing returns for ADsNamespaces (E5.5)
     if ($mbx = _E55CreateMailbox(@_)) {
       bless $provider,"Win32::Exchange";
-      bless $mbx,"Win32::Exchange";
       return $mbx;
     }
   }
@@ -831,11 +836,9 @@ sub _StripBackslashes {
   my $nt_pdc = $_[0];
   if ($nt_pdc =~ /^\\\\(.*)/) {
     $_[1] = $1;
-    _DebugComment("backslashes removed... $nt_pdc is now $_[1]\n",3);
     return 1;
   } else {
     $_[1] = $nt_pdc;
-    _DebugComment("Nothing to do... $nt_pdc\n",3);
     return 1;
   }
 }
@@ -859,13 +862,11 @@ sub GetMailbox {
     #IPerson returns for CDO.Person (E2K)
     if ($mbx = _E2KGetMailbox(@_)) {
       bless $mbx,"Win32::Exchange";
-      bless $provider,"Win32::Exchange";
       return $mbx;
     }
   } else {
     #nothing returns for ADsNamespaces (E5.5)
     if ($mbx = _E55GetMailbox(@_)) {
-      bless $provider,"Win32::Exchange";
       bless $mbx,"Win32::Exchange";
       return $mbx;
     }
@@ -961,8 +962,8 @@ sub _E2KGetMailbox {
     return 0;
   }
   if ($user_obj->{homeMDB} eq "") {
-    #Win32::OLE->LastError("0x80072030"); #I hope this works
-    _DebugComment("Error performing GetMailbox..  mailbox does not exist\n",2);
+    #Win32::OLE->LastError("0x80072030"); #This didn't work
+    _DebugComment("Error performing GetMailbox..  mailbox does not exist ($error_num)\n",2);
     return 0;
   } else {
     $provider->DataSource->Save();
@@ -1079,6 +1080,91 @@ sub _E2KSetAttributes {
   #http://msdn.microsoft.com/library/default.asp?url=/library/en-us/wss/wss/_cdo_setting_proxy_addresses.asp
   #  interfaces and attributes:
   #http://msdn.microsoft.com/library/default.asp?url=/library/en-us/wss/wss/_cdo_recipient_management_interfaces.asp
+}
+
+sub GetOwner {
+  my $error_num;
+  my $error_name;
+  my $provider = $_[0];
+
+  bless $provider,"Win32::OLE";
+  Win32::OLE->LastError(0);
+  my $type = Win32::OLE->QueryObjectType($provider);
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("failed querying OLE Object type for GetOwner\n",1);
+    bless $provider,"Win32::Exchange";
+    return 0;
+  }
+  bless $provider,"Win32::Exchange";
+  
+  my $rtn;
+  if ($type eq "IPerson") {
+    #IPerson returns should CDO.Person (E2K)
+    #no available support for this operation
+    bless $provider,"Win32::Exchange";
+    return 0;
+  } else {
+    #nothing returns for ADsNamespaces (E5.5)
+    if ($rtn = _E55GetOwner(@_)) {
+      bless $provider,"Win32::Exchange";
+      return $rtn;
+    }
+  }
+  bless $provider,"Win32::Exchange";
+  return 0;
+}
+
+sub _E55GetOwner {
+  my $error_num;
+  my $error_name;
+  my $mailbox;
+  my $returned_sid_type;
+  if (scalar(@_) > 1) {
+    $mailbox = $_[0];
+    if (scalar(@_) == 2) {
+      $returned_sid_type = $ADS_SID_WINNT_PATH;    
+    } elsif (scalar(@_) == 3) {
+      $returned_sid_type = $_[2];    
+    } else {
+      _ReportArgError("GetOwner [5.5]",scalar(@_));
+      return 0;
+    }
+  } else {
+    _ReportArgError("GetOwner [5.5]",scalar(@_));
+    return 0;
+  }
+
+
+  bless $mailbox,"Win32::OLE";
+
+  my $sid = Win32::OLE->new("ADsSID");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error creating ADsSID object -> $error_num ($error_name)\n",1);
+    return 0;
+  }
+  $mailbox->GetInfoEx(["Assoc-NT-Account"],0);
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error populating the property cache for Assoc-NT-Account -> $error_num ($error_name)\n",1);
+    return 0;
+  }
+
+  $sid->SetAs($ADS_SID_HEXSTRING,$mailbox->{'Assoc-NT-Account'});
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error creating ADsSID object -> $error_num ($error_name)\n",1);
+    return 0;
+  }
+
+  my $siduser = $sid->GetAs($returned_sid_type);
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    if (_ErrorCheck("0x80070534",$error_num,$error_name)) {
+      _DebugComment("there was an error validating the SID from the Domain Controller (the account doesn't seem to exist anymore) -> $error_num ($error_name)\n",1);
+      return 0;
+    }
+    _DebugComment("error getting SID to prepare for output -> $error_num ($error_name)\n",1);
+    return 0;
+  }
+  $_[1] = $siduser;
+  return 1;
 }
 
 sub SetOwner {
