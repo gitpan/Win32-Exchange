@@ -1,7 +1,13 @@
 Version History
 ------------------------
-2002/08/18 - 0.0.0.021   Registered with CPAN,
-                           -Requested Win32-Exchange as our namespace.
+2002/08/22 - 0.0.0.022   Added minimal testing (mswin32new.t), hopefully excluding me from more nastygrams. :(
+                         Changed the behavior of "new" to allow for ->new(...) and ::new(...)
+                         fixed some strict errors, and syntactical issues.  OOPS.
+                         Changed CreateMailbox to allow for the mailbox_store dn to be sent in place of storage_group name and mb_store name.
+                         Updated HTML docs.
+                         Still no reply on our namespace.  :(
+2002/08/21 - 0.0.0.021   Registered with CPAN,
+                           -Requested Win32-Exchange as our namespace, no reply yet.
                          Added "fuzzy" search for $server_name in _AdodbExtendedSearch
                              Allowed for getting Home-MTA and Home-MBD programatically instead of linking strings together
 2002/08/18 - 0.0.0.020   Added HTML Documentation, and invited perl-win32-users & admins for a look.

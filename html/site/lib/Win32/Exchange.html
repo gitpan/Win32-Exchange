@@ -67,10 +67,10 @@
 <HR>
 <H1><A NAME="synopsis">SYNOPSIS</A></H1>
 <PRE>
-  $provider = Win32::Exchange::new($info_store_server)) ||
-      die $rtn." - error creating new object\n';
+  $provider = Win32::Exchange->new($info_store_server)) ||
+      die " - error creating new object\n';
 
-  --- Exchange 5.5
+  #--- Exchange 5.5
   $mailbox = $provider->CreateMailbox($info_store_server,$mailbox_alias_name);
   if (!$mailbox) {
     die "Error creating mailbox\n";
@@ -79,7 +79,7 @@
   $mailbox->SetAttributes(\%Attributes);
   $mailbox->SetOwner("$domain\\$mailbox_alias_name");
 
-  --- Exchange 2000
+  #--- Exchange 2000
   $mailbox_user = $provider->CreateMailbox($info_store_server,
                                            $pdc,
                                            $mailbox_alias_name,
@@ -101,7 +101,8 @@ All methods return 0 on failure and 1 for success unless otherwise noted.<BR>
 <P>
 <H2><A NAME="functions">Functions</A></H2>
 <DL>
-<DT><STRONG><A NAME="function_new">$provider = Win32::Exchange::new($server_name,[ $version])</A></STRONG><BR>
+<DT><STRONG><A NAME="function_new">$provider = Win32::Exchange->new($server_name,[ $version]);</A></STRONG><BR>
+<DT><STRONG><A NAME="function_neu">$provider = Win32::Exchange::new($server_name,[ $version]);</A></STRONG><BR>
 <DD>
 The <A HREF="#item_new"><CODE>new()</CODE></A> class method starts a new instance of an Exchange provider object.
 It returns a reference to this object or 0 if the creation fails.
@@ -127,14 +128,19 @@ in Exchange 2000, but I think it's just an AD group with special properties.  In
 <DT><STRONG><A NAME="function_CreateMailbox"></A></STRONG><BR>
 <DT><STRONG><A NAME="function__E55CreateMailbox">$provider-&gt;<CODE>CreateMailbox($server_name,$mailbox_name,[$org,$ou]);#Exchange 5.5</CODE></A></STRONG><BR>
 <DT><STRONG><A NAME="function__E2kCreateMailbox">$provider-&gt;<CODE>CreateMailbox($server_name,$dc_name,$mailbox_name,$mail_domain,[$storage_group,$mailbox_store]);#Exchange 2000</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function__E2kCreateMailbox">$provider-&gt;<CODE>CreateMailbox($server_name,$dc_name,$mailbox_name,$mail_domain,[$mailbox_store_dn]);#Exchange 2000 using dn</CODE></A></STRONG><BR>
 <DD>
 The <A HREF="#function_CreateMailbox"><CODE>CreateMailbox()</CODE></A> function behaves differently depending on
-which type of provider it is passed (CDO.Person or ADsNamespaces).  As well, the arguments for the Exchange
+which type of provider it is passed (CDO.Person [E2K] or ADsNamespaces[5.5]).  As well, the arguments for the Exchange
 5.5 and 2000 functions are different.<BR>
 <BR>
-When making Exchange 2000 Mailboxes, it should be noted that if you are using multiple storage groups,
-or multiple mailbox stores, the presence of MAILBOX_STORE and STORAGE_GROUP are not optional, as the function will fail
-because it doesn't know where to put your new mailbox.<BR>
+When making Exchange 2000 Mailboxes, it should be noted that if you are using multiple "storage groups",
+or multiple "mailbox stores" on the Exchange Server, the presence of $storage_group and $mailbox_store are not optional (unless replaced by a valid mailbox store distinguished name as the fifth parameter),
+as the function will fail because it doesn't know where to put your new mailbox.<BR>
+<BR>
+Lastly, if you plan on running <STRONG><A NAME="function_LocateMailboxStore">LocateMailboxStore</STRONG> before
+the CreateMailbox, you can pass the distinguished name of the "located" mailbox store instead of the "storage group"
+and "mailbox store" names.<BR>
 <BR>
 <BR>
 <DT><STRONG><A NAME="function_GetDistinguishedName">Win32::Exchange::GetDistinguishedName($server_name,$serach_object,$result);</CODE></A></STRONG><BR>
@@ -232,8 +238,6 @@ In this example, @counts is an optional parameter and should be populated provid
 classes, and even if the function is unable to locate $storage_group and $mailbox_store, either because these variables are
 null strings and there is more than 1 mailbox store or storage group, or because they were not found as a valid storage group
 and mailbox store (useful for debugging purposes).<BR>
-</DT>
-</DL>
 <DT><A NAME="function_SetAttributes"></A>
 <DT><STRONG><A NAME="function__E55SetAttributes">$mailbox-&gt;<CODE>SetAttributes(\%attrs);Exchange 5.5</CODE></A></STRONG><BR>
 <DT><STRONG><A NAME="function__E2KSetAttributes">$ad_user_object-&gt;<CODE>SetAttributes(\%attrs);Exchange 2000</CODE></A></STRONG><BR>
@@ -258,7 +262,7 @@ Exchange 5.5:<BR>
 <BR>
   Note:<BR>
   <UL>
-    <LI>Setting the sn, cn, mail, givenname and rfc822Mailbox are required.  If the create succeeds and you do not set these attributes, your mailbox will have a fulname of "Exchange username Mailbox" (where username is the $mailbox_name that you pased to <A HREF="#function_SetOwner">CreateMailbox</A></LI>
+    <LI>Setting the sn, cn, mail, givenname and rfc822Mailbox are required.  If the create succeeds and you do not set these attributes, your mailbox will have a fulname of "Exchange username Mailbox" (where username is the $mailbox_name that you pased to <A HREF="#function_SetOwner">SetOwner</A></LI>
   </UL>
   See Also (Exchange 5.5):<BR>
   <A HREF="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/ds2x/hh/ds2x/exds_ds2exchgd_5pgl.asp">Exchange 5.5 and ADSI (ADSI Exchange)</A><BR>
@@ -299,6 +303,7 @@ group names, and is currently only applicable for use in setting permissions on 
   $mailbox->SetPerms(\@PermsUsers) || print 'Error setting perms\n'<BR>
 <BR>
 <BR>
+</DL>
 <H2><A NAME="module options">Module Options</A></H2>
 Currently there are none, but I intend to make DEBUG a passable parameter as it is currently hard-coded to 1 (enabled).<BR>
 <H1><A NAME="examples">EXAMPLES</A></H1>
@@ -469,7 +474,7 @@ I'd like to thank the following people:
 <P>Please send questions, comments or suggestions about this module to Steven Manross &lt;<A HREF="mailto:steven@manross.net">steven@manross.net</A>&gt.</P>
 <HR>
 <H1><A NAME="version">VERSION</A></H1>
-<P>Version 0.0.0.021     August 21, 2002</P>
+<P>Version 0.0.0.022     August 22, 2002</P>
 <H1><A NAME="copyright">Copyright</A></H1>
 Microsoft, Active Directory, Windows, Windows NT and Exchange are either registered trademarks or trademarks of Microsoft Corporation in the United States and/or other countries.<BR>
 <BR>

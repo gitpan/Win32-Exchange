@@ -22,7 +22,7 @@ if (!Win32::Exchange::GetVersion($info_store_server,\%ver) ) {
 print "version      = $ver{ver}\n";
 print "build        = $ver{build}\n";
 print "service pack = $ver{sp}\n";
-if (!($provider = Win32::Exchange::new($info_store_server,$ver{'ver'}))) {
+if (!($provider = Win32::Exchange->new($info_store_server,$ver{'ver'}))) {
   die "$rtn - Error returning into main from new ($Win32::Exchange::VERSION)\n";
 }
 

@@ -747,6 +747,7 @@ sub _E2KCreateMailbox {
 sub GetDistinguishedName {
   my $server_name;
   my $filter;
+  my $filter_name;
   my $result;
   if (scalar(@_) == 3) {
     $server_name = $_[0];
