@@ -9,6 +9,8 @@ Common Errors
   Desc:  Some issues can be fixed by reinstalling a current MDAC and/or ADS (NT4 only)
          As well, this could be an older LetProperty issue with a SecurityDescriptor.
            --make sure you have a recent build of ActivePerl (AS631 or AS633) and Win32-Exchange.
+0x80070539  The security ID structure is invalid. 
+  Desc:  Make sure that you've tried to set perms on a valid NT Account.  Computers are so picky that way.
 0x8007203a LDAP Server Down
   Desc: (see readment4.txt if you use NT4 to communicate with your exchange servers,
         but check the obvious...  did someone turn your server off?

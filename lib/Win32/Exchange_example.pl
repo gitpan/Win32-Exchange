@@ -1,39 +1,56 @@
 use Win32::Exchange;
-use Win32::AdminMisc;
-#if you don't have/use AdminMisc, you can get it by typing:
-#
-#ppm install Win32-AdminMisc --location=http://www.roth.net/perl/packages
-#
-#from the command line of any ActivePerl-enabled PC.
-#
-#or just set $domain and $pdc to your DOMAIN and \\PDC
 
 $domain = Win32::DomainName();
-$pdc = Win32::AdminMisc::GetPDC($domain);
-$mailbox_alias_name='thisisatest';
-$mailbox_full_name="This $mailbox_alias_name Isatest";
-$info_store_server="HOMEEXCH2";
-$mta_server=$info_store_server; #this could be different, but for testing, we'll set them the same
+$info_store_server="YOURMAILBOXSERVERNAME";
+$pdc = Win32::Exchange::FindCloseDC($info_store_server);
+$mta_server=$info_store_server; # this could be different, but for testing, we'll set them the same
+
+#  start E2K only
+$storage_group = ""; # you'd need to define this if you had more than 1 storage group on 1 server.
+$mailbox_store = ""; # you'd need to define this if you had more than 1 mailbox store on 1 or more storage groups.
+#  end E2K only
+
+# runtime variables
+
+$mailbox_alias_name='bgates'; # username
+$givenName = "Bill"; # firstname
+$sn = "Gates"; # lastname
+$mailbox_full_name="$givenName $mailbox_alias_name $sn";
+$distribution_list="Users"; # group the user will be in.
+$email_domain = "microsoft.com"; # remote part of the final email address
+$trustee_group = "Domain Admins"; # the group that has permission to log into this mailbox as well as the recipient
 
 if (!Win32::Exchange::GetVersion($info_store_server,\%ver) ) {
-  die "$rtn - Error returning into main from GetVersion\n";
+  print "$rtn - Error returning into main from GetVersion\n";
+  exit 0;
 }
 
 print "version      = $ver{ver}\n";
 print "build        = $ver{build}\n";
 print "service pack = $ver{sp}\n";
 if (!($provider = Win32::Exchange::Mailbox->new($ver{'ver'}))) {
-  die "$rtn - Error returning into main from new ($Win32::Exchange::VERSION)\n";
+  print "$rtn - Error returning into main from new ($Win32::Exchange::VERSION)\n";
+  exit 0;
 }
 
 my @PermsUsers;
 push (@PermsUsers,"$domain\\$mailbox_alias_name");
-push (@PermsUsers,"$domain\\Exchange Perm Users"); #Group that needs perms to the mailbox...
+push (@PermsUsers,"$domain\\$trustee_group"); #Group that needs perms to the mailbox...
 
 if ($ver{ver} eq "5.5") {
-  if (!Win32::Exchange::GetLDAPPath($info_store_server,$org,$ou)) {
+
+        e55(); # Exchange 5.5 instructions.     
+
+} elsif ($ver{ver} eq "6.0") {
+
+        e60(); # Exchange 6.0 instructions.
+}
+
+sub e55 {
+
+if (!Win32::Exchange::GetLDAPPath($info_store_server,$org,$ou)) {
     print "Error returning into main from GetLDAPPath\n";
-    exit 1;
+    exit 0;
   }
   print "GetLDAPPath succeeded\n";
   
@@ -45,12 +62,14 @@ if ($ver{ver} eq "5.5") {
     if ($mailbox->SetPerms(\@PermsUsers)) {
       print "Successfully set perms in GetMailbox\n";  
     } else {
-      die "Error setting perms from GetMailbox\n";  
+      print "Error setting perms from GetMailbox\n";  
+      exit 0;
     }
   } else {
     $mailbox = $provider->CreateMailbox($info_store_server,$mailbox_alias_name,$org,$ou);
     if (!$mailbox) {
-      die "error creating mailbox\n";
+      print "error creating mailbox\n";
+      exit 0;
     }
     print "We created a mailbox!\n";
     if ($mailbox->SetOwner("$domain\\$mailbox_alias_name")) {
@@ -79,23 +98,24 @@ if ($ver{ver} eq "5.5") {
     if ($mailbox->SetPerms(\@PermsUsers)) {
       print "Successfully set perms\n";  
     } else {
-      die "Error setting perms\n";  
+      print "Error setting perms\n";  
+      exit 0;
     }
   }
   
   #$Exchange_Info{'Deliv-Cont-Length'}='6000'; 
   #$Exchange_Info{'Submission-Cont-Length'}='6000'; 
-  $Exchange_Info{'givenName'}="This";
-  $Exchange_Info{'sn'}="Isatest";
+  $Exchange_Info{'givenName'}=$givenName;
+  $Exchange_Info{'sn'}=$sn;
   $Exchange_Info{'cn'}=$mailbox_full_name;
-  $Exchange_Info{'mail'}="$mailbox_alias_name\@manross.net";
-  $Exchange_Info{'rfc822Mailbox'}="$mailbox_alias_name\@manross.net"; 
+  $Exchange_Info{'mail'}="$mailbox_alias_name\@$email_domain";
+  $Exchange_Info{'rfc822Mailbox'}="$mailbox_alias_name\@$email_domain"; 
   #You can add any attributes to this hash that you can set via exchange for a mailbox
 
   #$rfax="RFAX:$Exchange_Info{'cn'}\@"; #this can set the Rightfax SMTP name for Exchange-enabled Rightfax mail delivery
   #push (@$Other_MBX,$rfax);
 
-  $smtp="smtp:another_name_to_send_to\@manross.net"; 
+  $smtp="smtp:another_name_to_send_to\@$email_domain"; 
   push (@$Other_MBX,$smtp);
   #be careful with 'otherMailbox'es..  You are deleting any addresses that may exist already
   #if you set them via 'otherMailbox' and don't get them first (you are now forewarned).
@@ -120,9 +140,10 @@ if ($ver{ver} eq "5.5") {
   push (@new_dl_members,$mailbox_alias_name);
   $provider->AddDLMembers($info_store_server,"newdltest",\@new_dl_members); 
 
-} elsif ($ver{ver} eq "6.0") {
-  $storage_group = ""; #you'd need to define this if you had more than 1 storage group on 1 server.
-  $mailbox_store = ""; #you'd need to define this if you had more than 1 mailbox store on 1 or more storage groups.
+}
+
+sub e60 {
+
   if (Win32::Exchange::LocateMailboxStore($info_store_server,$storage_group,$mailbox_store,$store_name,\@counts)) {
     print "storage group = $storage_group\n";
     print "mailbox store = $mailbox_store\n";
@@ -139,26 +160,27 @@ if ($ver{ver} eq "5.5") {
     if ($mailbox = $provider->CreateMailbox($info_store_server,
                                             $pdc,
                                             $mailbox_alias_name,
-                                            "insight.com"
-                                           )
+                                            $email_domain
+                                            )
        ) {
-      print "Mailbox create succeeded\n";
+      print "Mailbox create succeeded.\n";
     } else {
-      die "Failure is the option that you have selected!\n";
+      print "Mailbox creation failed.\n";
+      exit 0;
     }
     
   }
   #be careful with proxy addresses..  You are deleting any addresses that may exist already
   #if you set them via ProxyAddresses (you are now forewarned).
-  push (@$proxies,'SMTP:'.$mailbox_alias_name.'@manross.net');
-  push (@$proxies,'smtp:secondary@manross.net');
-  push (@$proxies,'smtp:primary@manross.net');
-  push (@$proxies,'smtp:tertiary@manross.net');
+  push (@$proxies,'SMTP:'.$mailbox_alias_name.'@'.$email_domain);
+  push (@$proxies,'SMTP:secondary@'.$email_domain);
+  push (@$proxies,'SMTP:primary@'.$email_domain);
+  push (@$proxies,'SMTP:tertiary@'.$email_domain);
 
   $Attributes{"IMailRecipient"}{ProxyAddresses} = $proxies;
   
   #  $Attributes{"ExchangeInterfaceName"}{Property} = value; #with this method you should be able to set any value
-  #                                                           imaginable.....
+  #                                                           imaginable.....  Here's a few to start with
 
   $Attributes{"IMailRecipient"}{IncomingLimit} = 6000;
   $Attributes{"IMailRecipient"}{OutgoingLimit} = 6000;
@@ -167,26 +189,32 @@ if ($ver{ver} eq "5.5") {
   $Attributes{"IMailboxStore"}{OverQuotaLimit} = 120; #at 120KB can't send...  I THINK...
   $Attributes{"IMailboxStore"}{HardLimit} = 130; #at 130KB, can't do anything...  I THINK...
   if (!$mailbox->SetAttributes(\%Attributes)) {
-    die "Error setting 2K Attributes\n";
+    print "Error setting 2K Attributes\n";
+    exit 0;
+
   } else {
     print "Set Attributes correctly\n";
   }
 
   my @PermUsers;
   push (@PermUsers,"$domain\\$mailbox_alias_name");
-  push (@PermUsers,"$domain\\Exchange Perms Admin"); #Group that needs perms to the mailbox...
+  push (@PermUsers,"$domain\\$trustee_group"); #Group that needs perms to the mailbox...
 
   if (!$mailbox->SetPerms(\@PermUsers)) {
-    die "Error setting 2K Perms\n";
+    print "Error setting 2K Perms\n";
+    exit 0;
   } else {
     print "Set 2K Perms correctly\n";
   }
   my @new_dl_members;
   push (@new_dl_members,$mailbox_alias_name);
-  if ($provider->AddDLMembers("_homelist",\@new_dl_members)) {
+  if ($provider->AddDLMembers($distribution_list,\@new_dl_members)) {
     print "Add successful to DL\n";
   } else {
-    die "Error adding distlist member\n";
+    print "Error adding distlist member\n";
+    exit 0;
   }
   exit 1;
+        
 }
+

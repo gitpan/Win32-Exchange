@@ -1,5 +1,16 @@
 Version History
 ------------------------
+2003/06/13 -     0.038   -fixed _E2KDeleteMailbox for very bad code issues (thanks to Peter Peterson for alerting me to this).
+                         -fixed _DebugComment and ReportArgError issues in Mailbox.pm and SMTP::Security.pm.
+                         -fixed adModeReadWrite issue in SetAttributes (thanks to Peter Peterson for helping me debug this).
+                         -fixed ErrorCheck issue that wouldn't send the error info back to the originating module.
+                         -fixed error in the CreateMailbox interface that stopped mailbox creation of LDAP wasn't available
+                          on the exchange server.  I guess i just expected that LDAP was always available.  :(
+2003/05/29 -     0.037   -Added DeleteMailbox
+                              -I don't have a E55 server to test on anymore  :(   
+                         -Changed some of the Win32::Exchange::_DebugComment stuff and how it processes the calls from
+                          other modules.  It made a lot more sense to pass the DEBUG value, than to change the routine 
+                          eash time a new module was added to the fray.
 2003/05/05 -     0.036   -Moved Mailbox functions to Win32::Exchange::Mailbox
                          -Added FindCloseDC
                          -Added Win32::Exchange::SMTP::Security;

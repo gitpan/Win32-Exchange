@@ -30,7 +30,7 @@ Win32::OLE->Option('_Unique' => 1);
 #@ISA = qw(Win32::OLE);
 
 my $Version;
-my $VERSION = $Version = "0.036";
+my $VERSION = $Version = "0.038";
 my $DEBUG = 5;
 
 
@@ -286,7 +286,7 @@ sub _E2kVersionInfo {
 }
 
 sub _AdodbExtendedSearch {
-  my $server_name;
+  my $search_string;
   my $path;
   my $filter;
   my $columns;
@@ -295,7 +295,7 @@ sub _AdodbExtendedSearch {
   my $fuzzy;
   my $return_point;
   if (scalar(@_) > 4) {
-    $server_name = $_[0];
+    $search_string = $_[0];
     $path = $_[1];
     $filter = $_[2];
     $columns = $_[3];
@@ -318,12 +318,12 @@ sub _AdodbExtendedSearch {
     $option = $1;
     my $RootDSE = Win32::OLE->GetObject("LDAP://RootDSE");
     if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-      _DebugComment("Failed creating object for _AdodbExtendedSearch on $server_name -> $error_num ($error_name)\n",1);
+      _DebugComment("Failed creating object for _AdodbExtendedSearch on $search_string -> $error_num ($error_name)\n",1);
       return 0;
     }
     my $actual_ldap_path = $RootDSE->Get($option);
     if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-      _DebugComment("Failed creating object for _AdodbExtendedSearch on $server_name -> $error_num ($error_name)\n",1);
+      _DebugComment("Failed creating object for _AdodbExtendedSearch on $search_string -> $error_num ($error_name)\n",1);
       return 0;
     }
     $path = "LDAP://".$actual_ldap_path;
@@ -332,19 +332,19 @@ sub _AdodbExtendedSearch {
   my $Com = Win32::OLE->new("ADODB.Command");
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
       _DebugComment("path=$path\nfilter=$filter\ncolumns=$columns\n",2);
-      _DebugComment("Failed creating ADODB.Command object for _AdodbExtendedSearch on $server_name -> $error_num ($error_name)\n",1);
+      _DebugComment("Failed creating ADODB.Command object for _AdodbExtendedSearch on $search_string -> $error_num ($error_name)\n",1);
       return 0;
   }
   my $Conn = Win32::OLE->new("ADODB.Connection");
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
       _DebugComment("path=$path\nfilter=$filter\ncolumns=$columns\n",2);
-      _DebugComment("Failed creating ADODB.Connection object for version information (E55) on $server_name -> $error_num ($error_name)\n",1);
+      _DebugComment("Failed creating ADODB.Connection object for version information (E55) on $search_string -> $error_num ($error_name)\n",1);
       return 0;
   }
   $Conn->{'Provider'} = "ADsDSOObject";
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
       _DebugComment("path=$path\nfilter=$filter\ncolumns=$columns\n",2);
-      _DebugComment("Failed executing ADODB.Command for version information (E55) on $server_name -> $error_num ($error_name)\n",1);
+      _DebugComment("Failed executing ADODB.Command for version information (E55) on $search_string -> $error_num ($error_name)\n",1);
       return 0;
   }
   $Conn->{Open} = "Win32-Exchange a perl module";
@@ -354,7 +354,7 @@ sub _AdodbExtendedSearch {
   my $RS = $Com->Execute();
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
       _DebugComment("path=$path\nfilter=$filter\ncolumns=$columns\n",2);
-      _DebugComment("Failed executing ADODB.Command for version information (E55) on $server_name -> $error_num ($error_name)\n",1);
+      _DebugComment("Failed executing ADODB.Command for version information (E55) on $search_string -> $error_num ($error_name)\n",1);
       return 0;
   }
   my $not_found = 1;
@@ -362,7 +362,7 @@ sub _AdodbExtendedSearch {
   while ($search_val eq "") {
     if ($fuzzy != 0) {
       _DebugComment("fuzzy=$fuzzy\n",3);
-      if ($RS->Fields($cols[($fuzzy - 1)])->value =~ /$server_name/i) {
+      if ($RS->Fields($cols[($fuzzy - 1)])->value =~ /$search_string/i) {
         if (ref($RS->Fields($cols[($fuzzy - 1)])->value) eq "ARRAY") {
           _DebugComment("found ".@{$RS->Fields($cols[1])->value}[0]."\n",3);
           $search_val = @{$RS->Fields($cols[1])->value}[0]; 
@@ -376,8 +376,8 @@ sub _AdodbExtendedSearch {
         }
       }
     } else {
-      _DebugComment("found this: ".($RS->Fields($cols[1])->value)[0]."\n  -->".($RS->Fields($cols[0])->value)[0]."\n  -->$server_name\n",4);
-      if (lc($server_name) eq lc($RS->Fields($cols[0])->value)) {
+      _DebugComment("found this: ".($RS->Fields($cols[1])->value)[0]."\n  -->".($RS->Fields($cols[0])->value)[0]."\n  -->$search_string\n",4);
+      if (lc($search_string) eq lc($RS->Fields($cols[0])->value)) {
         if (ref($RS->Fields($cols[1])->value) eq "ARRAY") {
           _DebugComment("found (not fuzzy) (ARRAY)".$RS->Fields($cols[1])->value."\n",3);
           $search_val = @{$RS->Fields($cols[1])->value}[0]; 
@@ -398,7 +398,7 @@ sub _AdodbExtendedSearch {
     $RS->MoveNext;
   }
   if ($search_val eq "-1") {
-    _DebugComment("Unable to match valid data for your search on $server_name\n",1);
+    _DebugComment("Unable to match valid data for your search on $search_string\n",1);
     return 0;
   }
 }
@@ -705,12 +705,8 @@ sub _DebugComment {
   if (scalar(@_) == 2) {
     print "$_[0]" if ($DEBUG > ($_[1] - 1));
   } elsif (scalar(@_) == 3) {
-    if ($_[2] eq "Win32::Exchange::Mailbox") {
-    } elsif ($_[2] eq "Win32::Exchange::Mailbox") {
-      print "$_[0]" if ($Win32::Exchange::Mailbox::DEBUG > ($_[1] - 1));
-    } elsif ($_[2] eq "Win32::Exchange::SMTP::Security") {
-      print "$_[0]" if ($Win32::Exchange::SMTP::Security::DEBUG > ($_[1] - 1));
-    }
+    #usually called from another routine (eg.. Win32::Exchange::SMTP::Security or an external script)
+    print "$_[0]" if ($_[2] > ($_[1] - 1));
   } else {
     print "DebugComment Error!!!!\n";
   }

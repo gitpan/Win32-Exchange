@@ -251,11 +251,11 @@ This area under construction.  Sorry.
   <UL>
     <LI>ADSI 2.5</LI>
     <LI>ADSI SDK (Software Development Kit)</LI>
-    <LI>ADsSecurity.dll -- this dll must be registered on your system using the command <B>'regsvr32 adssecurity.dll'</B> (This dll is found in the ADSI SDK)</LI>
     <LI>The Exchange 5.5 Admin program is optional, but helpful in viewing data related to Exchange 5.5 and 2000.</LI>
   </UL>
-  <LI>W2K/XP/.NET clients talking to Exchange servers will need the following software from Microsoft installed:</LI>
+  <LI>W2K/XP/.NET clients talking to Exchange servers (E55 and E2K) will need the following software from Microsoft installed:</LI>
   <UL>
+    <LI>ADsSecurity.dll -- this dll must be registered on the system you are running perl from, using the command <B>'regsvr32 adssecurity.dll'</B> (This dll is found in the ADSI SDK), but only if you want to set permissions using this module.</LI>
     <LI>No additional software required (with the exception of the Exchange 2000 requirements below)</LI>
   </UL>
   <LI>All clients manipulating Exchange 2000 mailboxes will need the following software:</LI>
@@ -286,7 +286,7 @@ This area under construction.  Sorry.
 <HR>
 <H1><A NAME="see also">SEE ALSO</A></H1>
 <UL>
-  <LI><A HREF="./Exchange/Mailbox.html">Win32::Exchange</A></LI>
+  <LI><A HREF="./Exchange/Mailbox.html">Win32::Exchange::Mailbox</A></LI>
   <LI><A HREF="./Exchange/SMTP/Security.html">Win32::Exchange::SMTP::Security</A></LI>
   <LI><A HREF="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/wss/wss/_exch2k_welcome_to_exchange.asp">The Exchange 2000 SDK</A></LI>
   <LI><A HREF="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/ds2x/hh/ds2x/exds_ds2exchgd_5pgl.asp">Exchange 5.5 and ADSI (ADSI Exchange)</A></LI>
@@ -298,8 +298,6 @@ This area under construction.  Sorry.
 <P>
 <HR>
 <H1><A NAME="authors">AUTHORS</A></H1>
-This set of modules was born out of a lot of scripts that were traveling through the listservers for years.<BR>
-<BR>
 With the advent of Exchange 2000, lots of perl scripts started pouring through the listservs, that tried to parse the Storage Group name and Mailbox Store names into
 an incredibly long string to allow for Exchange 2000 mailbox creation (circa 2001?).<BR>
 <BR>
@@ -309,8 +307,7 @@ It was; LocateMailboxStore is an implementation of that idea.<BR>
 <BR>
 As it turns out, there are a lot of tricks like LocateMailboxStore that have helped develop this module from
 a string concatenation mess into a lot of fancy searches for the complete ldap paths and distinguished names
-that power mailbox creation and Exchange Server administration via this module.  If you have something to add,
-please feel free to send me a code sample, and I'll see what I can do to incorporate it into the next release.<BR>
+that power mailbox creation and Exchange Server administration.<BR>
 <BR>
 Most of the fancy searches were created by poking around in the objects themselves with ADSVW.EXE (an ADSI
 SDK tool), and then writing an ADODB search to return the right result set.<BR>

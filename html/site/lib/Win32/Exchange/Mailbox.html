@@ -27,6 +27,7 @@
             <LI><A HREF="#function_new">new</A></LI>
             <LI><A HREF="#function_AddDLMembers">AddDLMembers</A></LI>
             <LI><A HREF="#function_CreateMailbox">CreateMailbox</A></LI>
+            <LI><A HREF="#function_DeleteMailbox">DeleteMailbox</A></LI>
             <LI><A HREF="#function_GetMailbox">GetMailbox</A></LI>
             <LI><A HREF="#function_SetAttributes">SetAttributes</A></LI>
             <LI><A HREF="#function_SetPerms">SetPerms</A></LI>
@@ -37,6 +38,7 @@
             <LI><A HREF="#function_new">new</A></LI>
             <LI><A HREF="#function_AddDLMembers">AddDLMembers</A></LI>
             <LI><A HREF="#function_CreateMailbox">CreateMailbox</A></LI>
+            <LI><A HREF="#function_DeleteMailbox">DeleteMailbox</A></LI>
             <LI><A HREF="#function_MailEnable">MailEnable</A></LI>
             <LI><A HREF="#function_SetAttributes">SetAttributes</A></LI>
             <LI><A HREF="#function_SetPerms">SetPerms</A></LI>
@@ -170,6 +172,42 @@ the CreateMailbox, you can pass the distinguished name of the "located" mailbox 
 and "mailbox store" names.<BR>
 <BR>
 <BR>
+<DT><STRONG><A NAME="function_DeleteMailbox"></A></STRONG><BR>
+<DT><STRONG><A NAME="function__E2KDeleteMailbox">$mailbox-&gt;<CODE>DeleteMailbox();#E2K</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function__E2KDeleteMailbox">$provider-&gt;<CODE>DeleteMailbox($exchange_server,$mailbox_name,);#E55</CODE></A></STRONG><BR>
+<DD>
+The <A HREF="#function_DeleteMailbox"><CODE>DeleteMailbox()</CODE></A> function is implemented for Exchange 5.5 and 2000.<BR>
+<BR>
+The base object that this function uses for Exchange 5.5 is the LDAP provider object as created by the new function.<BR>
+<BR>
+The base object that this function uses for Exchange 2000 is the mailbox object as retrieved by the <A HREF="#function_GetMailbox"><CODE>GetMailbox()</CODE></A> function.
+<BR>
+$provider = Win32::Exchange::Mailbox->new($exch_server);<BR>
+sub e2k {
+  $mailbox = $provider->GetMailbox($exch_server,"thisisatest");<BR>
+  if ($mailbox) {<BR>
+    print "Got Mailbox\n";<BR>
+  } else {<BR>
+    print "Mailbox was not gotten.\n";<BR>
+  }<BR>
+  <BR>
+  if ($mailbox->DeleteMailbox()) {<BR>
+    print "Mailbox deletion successful.\n";<BR>
+  } else {<BR>
+    print "Mailbox deletion failed.\n";<BR>
+  }<BR>
+}<BR>
+<BR>
+sub e55 {<BR>
+  if ($provider->DeleteMailbox($exch_server,$mailbox_alias)) {<BR>
+    print "Mailbox deletion successful.\n";<BR>
+  } else {<BR>
+    print "Mailbox deletion failed.\n";<BR>
+  }<BR>
+}<BR>
+<BR>
+<BR>
+
 <DT><STRONG><A NAME="function_GetMailbox"></A></STRONG><BR>
 <DT><STRONG><A NAME="function__E55GetMailbox">$provider-&gt;<CODE>GetMailbox($server_name,$mailbox_name,[$org,$ou]);</CODE></A></STRONG><BR>
 <DT><STRONG><A NAME="function__E55GetMailbox">$provider-&gt;<CODE>GetMailbox($server_name,$mailbox_name,[1]);#Exchange 5.5</CODE></A></STRONG><BR>
@@ -292,118 +330,223 @@ Currently there are none, but I intend to make DEBUG a passable parameter as it 
 <H1><A NAME="examples">EXAMPLES</A></H1>
 <pre>
 use Win32::Exchange;
-use Win32::AdminMisc;
 
 $domain = Win32::DomainName();
-$pdc = Win32::AdminMisc::GetPDC($domain);
-$mailbox_alias_name='thisisatest';
-$mailbox_full_name="This $mailbox_alias_name Isatest";
-$info_store_server="HOMEEXCH2";
+$info_store_server="YOURMAILBOXSERVERNAME";
+$pdc = Win32::Exchange::FindCloseDC($info_store_server);
+$mta_server=$info_store_server; # this could be different, but for testing, we'll set them the same
 
-if (!Win32::Exchange->GetVersion($info_store_server,\%ver) ) {
-  die "$rtn - Error returning into main from GetVersion\n";
+#  start E2K only
+$storage_group = ""; # you'd need to define this if you had more than 1 storage group on 1 server.
+$mailbox_store = ""; # you'd need to define this if you had more than 1 mailbox store on 1 or more storage groups.
+#  end E2K only
+
+# runtime variables
+
+$mailbox_alias_name='bgates'; # username
+$givenName = "Bill"; # firstname
+$sn = "Gates"; # lastname
+$mailbox_full_name="$givenName $mailbox_alias_name $sn";
+$distribution_list="Users"; # group the user will be in.
+$email_domain = "microsoft.com"; # remote part of the final email address
+$trustee_group = "Domain Admins"; # the group that has permission to log into this mailbox as well as the recipient
+
+if (!Win32::Exchange::GetVersion($info_store_server,\%ver) ) {
+  print "$rtn - Error returning into main from GetVersion\n";
+  exit 0;
 }
 
 print "version      = $ver{ver}\n";
 print "build        = $ver{build}\n";
 print "service pack = $ver{sp}\n";
-
 if (!($provider = Win32::Exchange::Mailbox->new($ver{'ver'}))) {
-  die "$rtn - Error returning into main from new ($Win32::Exchange::Mailbox::VERSION)\n";
+  print "$rtn - Error returning into main from new ($Win32::Exchange::VERSION)\n";
+  exit 0;
 }
 
+my @PermsUsers;
+push (@PermsUsers,"$domain\\$mailbox_alias_name");
+push (@PermsUsers,"$domain\\$trustee_group"); #Group that needs perms to the mailbox...
+
 if ($ver{ver} eq "5.5") {
-  if (!Win32::Exchange::GetLDAPPath($info_store_server,$org,$ou)) {
+
+        e55(); # Exchange 5.5 instructions.
+
+} elsif ($ver{ver} eq "6.0") {
+
+        e60(); # Exchange 6.0 instructions.
+}
+
+sub e55 {
+
+if (!Win32::Exchange::GetLDAPPath($info_store_server,$org,$ou)) {
     print "Error returning into main from GetLDAPPath\n";
-    exit 1;
+    exit 0;
   }
   print "GetLDAPPath succeeded\n";
+
   if ($mailbox = $provider->GetMailbox($info_store_server,$mailbox_alias_name,$org,$ou)) {
     print "Mailbox already existed\n";
     if ($mailbox->SetOwner("$domain\\$mailbox_alias_name")) {
       print "SetOwner in GetMailbox worked!\n";
     }
+    if ($mailbox->SetPerms(\@PermsUsers)) {
+      print "Successfully set perms in GetMailbox\n";
+    } else {
+      print "Error setting perms from GetMailbox\n";
+      exit 0;
+    }
   } else {
     $mailbox = $provider->CreateMailbox($info_store_server,$mailbox_alias_name,$org,$ou);
     if (!$mailbox) {
-      die "error creating mailbox\n";
+      print "error creating mailbox\n";
+      exit 0;
     }
     print "We created a mailbox!\n";
+    if ($mailbox->SetOwner("$domain\\$mailbox_alias_name")) {
+      print "SetOwner worked\n";
+    } else {
+      print "SetOwner failed\n";
+    }
+    if ($mailbox->GetOwner($nt_user,0x2)) {
+      print "GetOwner worked: owner = $nt_user\n";
+    } else {
+      print "GetOwner failed\n";
+    }
+
+    $mailbox->GetPerms(\@array);
+
+    foreach my $acl (@array) {
+      print "   trustee - $acl->{Trustee}\n";
+      print "accessmask - $acl->{AccessMask}\n";
+      print "   acetype - $acl->{AceType}\n";
+      print "  aceflags - $acl->{AceFlags}\n";
+      print "     flags - $acl->{Flags}\n";
+      print "   objtype - $acl->{ObjectType}\n";
+      print "inhobjtype - $acl->{InheritedObjectType}\n";
+    }
+
+    if ($mailbox->SetPerms(\@PermsUsers)) {
+      print "Successfully set perms\n";
+    } else {
+      print "Error setting perms\n";
+      exit 0;
+    }
   }
 
-  $Exchange_Info{'Deliv-Cont-Length'}='6000';
-  $Exchange_Info{'Submission-Cont-Length'}='6000';
-  $Exchange_Info{'givenName'}="This";
-  $Exchange_Info{'sn'}="Isatest";
+  #$Exchange_Info{'Deliv-Cont-Length'}='6000';
+  #$Exchange_Info{'Submission-Cont-Length'}='6000';
+  $Exchange_Info{'givenName'}=$givenName;
+  $Exchange_Info{'sn'}=$sn;
   $Exchange_Info{'cn'}=$mailbox_full_name;
-  $Exchange_Info{'mail'}="$mailbox_alias_name\@insight.com";
-  $Exchange_Info{'rfc822Mailbox'}="$mailbox_alias_name\@insight.com";
+  $Exchange_Info{'mail'}="$mailbox_alias_name\@$email_domain";
+  $Exchange_Info{'rfc822Mailbox'}="$mailbox_alias_name\@$email_domain";
+  #You can add any attributes to this hash that you can set via exchange for a mailbox
 
-  $smtp="smtp:another_name_to_send_to\@$mail_domain";
+  #$rfax="RFAX:$Exchange_Info{'cn'}\@"; #this can set the Rightfax SMTP name for Exchange-enabled Rightfax mail delivery
+  #push (@$Other_MBX,$rfax);
+
+  $smtp="smtp:another_name_to_send_to\@$email_domain";
   push (@$Other_MBX,$smtp);
   #be careful with 'otherMailbox'es..  You are deleting any addresses that may exist already
   #if you set them via 'otherMailbox' and don't get them first (you are now forewarned).
   $Exchange_Info{'otherMailbox'}=$Other_MBX;
 
-  $mailbox->SetAttributes(\%Exchange_Info);
-  $mailbox->SetOwner("$domain\\$mailbox_alias_name");
+  if (!Win32::Exchange::GetDistinguishedName($mta_server,"Home-MTA",$Exchange_Info{"Home-MTA"})) {
+    print "Failed getting distinguished name for Home-MTA on $info_store_server\n";
+    exit 0;
+  }
+  if (!Win32::Exchange::GetDistinguishedName($info_store_server,"Home-MDB",$Exchange_Info{"Home-MDB"})) {
+    print "Failed getting distinguished name for Home-MDB on $info_store_server\n";
+    exit 0;
+  }
 
-  my @PermsUsers;
-  push (@PermsUsers,"$domain\\$mailbox_alias_name");
-  push (@PermsUsers,"$domain\\Exchange Perm Users"); #Group that needs perms to the mailbox...
+  if ($mailbox->SetAttributes(\%Exchange_Info)) {
+    print "SetAttributes worked\n";
+  } else {
+    print "SetAttributes failed\n";
+  }
 
-  $mailbox->SetPerms(\@PermsUsers);
   my @new_dl_members;
   push (@new_dl_members,$mailbox_alias_name);
   $provider->AddDLMembers($info_store_server,"newdltest",\@new_dl_members);
 
-} elsif ($ver{ver} eq "6.0") {
-  $storage_group = ""; #you'd need to define this if you had more than 1 storage group on 1 server.
-  $mailbox_store = ""; #you'd need to define this if you had more than 1 mailbox store on 1 or more storage groups.
+}
+
+sub e60 {
+
   if (Win32::Exchange::LocateMailboxStore($info_store_server,$storage_group,$mailbox_store,$store_name,\@counts)) {
     print "storage group = $storage_group\n";
     print "mailbox store = $mailbox_store\n";
     print "located store distinguished name= $store_name\n";
     print "$info_store_server\n";
     print "  Total:\n";
-    print "    storage groups = @counts[0]\n";
-    print "    mailbox stores = @counts[1]\n";
+    print "    storage groups = $counts[0]\n";
+    print "    mailbox stores = $counts[1]\n";
   }
-  if ($mailbox = $provider->CreateMailbox($info_store_server,
-                                              $pdc,
-                                              $mailbox_alias_name,
-                                              "insight.com",
-                                              $store_name
-                                             )
-     ) {
-    print "Mailbox create succeeded\n";
+  if ($mailbox = $provider->GetMailbox($pdc,$mailbox_alias_name)) {
+    print "Got Mailbox successfully\n";
   } else {
-    die "Failure is the option that you have selected!\n";
+    print "Mailbox did not exist\n";
+    if ($mailbox = $provider->CreateMailbox($info_store_server,
+                                            $pdc,
+                                            $mailbox_alias_name,
+                                            $email_domain
+                                            )
+       ) {
+      print "Mailbox create succeeded.\n";
+    } else {
+      print "Mailbox creation failed.\n";
+      exit 0;
+    }
+
   }
   #be careful with proxy addresses..  You are deleting any addresses that may exist already
   #if you set them via ProxyAddresses (you are now forewarned).
-  push (@$proxies,'SMTP:'.$mailbox_alias_name.'@manross.net');
-  push (@$proxies,'smtp:secondary@manross.net');
-  push (@$proxies,'smtp:primary@manross.net');
-  push (@$proxies,'smtp:tertiary@manross.net');
+  push (@$proxies,'SMTP:'.$mailbox_alias_name.'@'.$email_domain);
+  push (@$proxies,'SMTP:secondary@'.$email_domain);
+  push (@$proxies,'SMTP:primary@'.$email_domain);
+  push (@$proxies,'SMTP:tertiary@'.$email_domain);
+
   $Attributes{"IMailRecipient"}{ProxyAddresses} = $proxies;
+
+  #  $Attributes{"ExchangeInterfaceName"}{Property} = value; #with this method you should be able to set any value
+  #                                                           imaginable.....  Here's a few to start with
+
   $Attributes{"IMailRecipient"}{IncomingLimit} = 6000;
   $Attributes{"IMailRecipient"}{OutgoingLimit} = 6000;
   $Attributes{"IMailboxStore"}{EnableStoreDefaults} = 0;
   $Attributes{"IMailboxStore"}{StoreQuota} = 100; #at 100KB starts getting warnings
-  $Attributes{"IMailboxStore"}{OverQuotaLimit} = 120; #at 120KB can't send...
-  $Attributes{"IMailboxStore"}{HardLimit} = 130; #at 130KB, can't do anything...
-  if (!$mailbox->Win32::Exchange::SetAttributes(\%Attributes)) {
-    die "Error setting 2K Attributes\n";
+  $Attributes{"IMailboxStore"}{OverQuotaLimit} = 120; #at 120KB can't send...  I THINK...
+  $Attributes{"IMailboxStore"}{HardLimit} = 130; #at 130KB, can't do anything...  I THINK...
+  if (!$mailbox->SetAttributes(\%Attributes)) {
+    print "Error setting 2K Attributes\n";
+    exit 0;
+
   } else {
     print "Set Attributes correctly\n";
   }
-  my @PermsUsers;
-  push (@PermsUsers,"$domain\\$mailbox_alias_name");
-  push (@PermsUsers,"$domain\\Exchange Perm Users"); #Group that needs perms to the mailbox...
 
-  $mailbox->SetPerms(\@PermsUsers);
+  my @PermUsers;
+  push (@PermUsers,"$domain\\$mailbox_alias_name");
+  push (@PermUsers,"$domain\\$trustee_group"); #Group that needs perms to the mailbox...
+
+  if (!$mailbox->SetPerms(\@PermUsers)) {
+    print "Error setting 2K Perms\n";
+    exit 0;
+  } else {
+    print "Set 2K Perms correctly\n";
+  }
+  my @new_dl_members;
+  push (@new_dl_members,$mailbox_alias_name);
+  if ($provider->AddDLMembers($distribution_list,\@new_dl_members)) {
+    print "Add successful to DL\n";
+  } else {
+    print "Error adding distlist member\n";
+    exit 0;
+  }
   exit 1;
+
 }
 </PRE>
 <H1><A NAME="notes">NOTES</A></H1>
@@ -491,7 +634,7 @@ I'd like to extend thanks to the following:<BR>
 <P>Please send questions, comments or suggestions about this module to Steven Manross &lt;<A HREF="mailto:steven@manross.net">steven@manross.net</A>&gt.</P>
 <HR>
 <H1><A NAME="version">VERSION</A></H1>
-<P>Version 0.036     May 5, 2003</P>
+<P>Version 0.039     June 13, 2003</P>
 <H1><A NAME="copyright">Copyright</A></H1>
 Microsoft, Active Directory, ADSI, Windows, Windows NT, MSDN, and Exchange are either registered trademarks or trademarks of Microsoft Corporation in the United States and/or other countries.<BR>
 <BR>

@@ -27,7 +27,7 @@ Win32::OLE->Option('_Unique' => 1);
 #@ISA = qw(Win32::OLE);
 
 my $Version;
-my $VERSION = $Version = "0.036";
+my $VERSION = $Version = "0.039";
 my $DEBUG = 1;
 
 sub new {
@@ -344,6 +344,108 @@ sub _E2KCreateMailbox {
   return $provider;
 }
 
+sub DeleteMailbox {
+  my $error_num;
+  my $error_name;
+  my $provider = $_[0];
+
+  bless $provider,"Win32::OLE";
+  Win32::OLE->LastError(0);
+  my $type = Win32::OLE->QueryObjectType($provider);
+  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("failed querying OLE Object for Exchange Server Determination for DeleteMailbox\n",1);
+    bless $provider,"Win32::Exchange::Mailbox";
+    return 0;
+  }
+  bless $provider,"Win32::Exchange::Mailbox";
+  my $rtn = 0;
+  if ($type eq "IPerson") {
+    #IPerson returns for CDO.Person (E2K)
+    if (_E2KDeleteMailbox(@_)) {
+      $rtn = 1;
+    }
+  } else {
+    #nothing returns for ADsNamespaces (E5.5)
+    if (_E55DeleteMailbox(@_)) {
+      $rtn = 1;
+    }
+  }
+  bless $provider,"Win32::Exchange::Mailbox";
+  return $rtn;
+}
+
+sub _E2KDeleteMailbox {
+  if (scalar(@_) != 1) {
+    _ReportArgError("DeleteMailbox [E2K]",scalar(@_));
+    return 0;
+  }
+  my $mailbox = $_[0];
+  my $error_num;
+  my $error_name;
+  bless $mailbox,"Win32::OLE";
+  my $interface = $mailbox->GetInterface("IMailboxStore");
+  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error getting IMailboxStore interface for user mailbox deletion [E2K]\n",1);
+    bless $mailbox,"Win32::Exchange::Mailbox";
+    return 0;
+  }
+  $interface->DeleteMailbox();
+  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error deleting user mailbox (DeleteMailbox) [E2K]\n",1);
+    bless $mailbox,"Win32::Exchange::Mailbox";
+    return 0;
+  }
+
+  $mailbox->Datasource->Save();
+  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error deleting user mailbox (Save) [E2K]\n",1);
+    bless $mailbox,"Win32::Exchange::Mailbox";
+    return 0;
+  }
+  _DebugComment("Mailbox deleted successfully",1);
+  return 1;
+}
+
+sub _E55DeleteMailbox {
+  my $ldap_provider;
+  my $information_store_server;
+  my $mailbox_alias_name;
+  my $error_num;
+  my $error_name;
+  my $find_mb;
+  if (scalar(@_) > 2) {
+    $ldap_provider = $_[0];
+    $information_store_server = $_[1];
+    $mailbox_alias_name = $_[2];
+  } else {
+    _ReportArgError("DeleteMailbox [5.5] ",scalar(@_));
+    return 0;
+  }
+  my $recipients_path;
+  my $exch_mb_dn;
+  my $path;
+  
+  my $Recipients = $ldap_provider->GetMailboxContainer($information_store_server,$mailbox_alias_name);
+  bless $ldap_provider,"Win32::OLE";
+  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Failed opening recipients path on $information_store_server\n",1);
+    return 0;
+  }
+
+  bless $Recipients,"Win32::OLE";
+  my $original_ole_warn_value = $Win32::OLE::Warn;
+  $Win32::OLE::Warn = 0; #Turn STDERR warnings off because we probably are going to get an error (0x80072030) if we are creating a new box.
+  
+  $Recipients->Delete("organizationalPerson", "cn=$mailbox_alias_name");
+  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Unable to Get the mailbox object where the rdn == $mailbox_alias_name on $information_store_server ($error_num)\n",1);
+    $Win32::OLE::Warn=$original_ole_warn_value;
+    return 0;
+  }
+  $Win32::OLE::Warn=$original_ole_warn_value;
+  return 1;
+}
+
 sub GetMailbox {
   my $error_num;
   my $error_name;
@@ -466,7 +568,7 @@ sub _E2KGetMailbox {
   }
 
   bless $provider,"Win32::OLE";
-  $provider->DataSource->Open("LDAP://$dc/$user_dist_name");
+  $provider->DataSource->Open("LDAP://$dc/$user_dist_name",undef,adModeReadWrite);
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("Failed opening AD user account for mailbox retrieval on $dc ($error_num)\n",1);
     return 0;
@@ -1295,12 +1397,19 @@ sub _E2KAddDLMembers {
   return 1;
 }
 
+sub _ReportArgError {
+  my $rtn = Win32::Exchange::_ReportArgError($_[0],$_[1]);
+  return $rtn;
+}
+
 sub _DebugComment {
-  Win32::Exchange::_DebugComment($_[0],$_[1],"Win32::Exchange::Mailbox");
+  my $rtn = Win32::Exchange::_DebugComment($_[0],$_[1],$DEBUG);
+  return $rtn;
 }
 
 sub ErrorCheck {
-  Win32::Exchange::ErrorCheck($_[0]);
+  my $rtn = Win32::Exchange::ErrorCheck($_[0],$_[1],$_[2]);
+  return $rtn;
 }
 
 1;

@@ -446,12 +446,19 @@ sub Release {
   return 1;
 }
 
+sub _ReportArgError {
+  my $rtn = Win32::Exchange::_ReportArgError($_[0],$_[1]);
+  return $rtn;
+}
+
 sub _DebugComment {
-  _DebugComment($_[0],$_[1],"Win32::Exchange::SMTP::Security");
+  my $rtn = Win32::Exchange::_DebugComment($_[0],$_[1],$DEBUG);
+  return $rtn;
 }
 
 sub ErrorCheck {
-  Win32::Exchange::ErrorCheck($_[0]);
+  my $rtn = Win32::Exchange::ErrorCheck($_[0],$_[1],$_[2]);
+  return $rtn;
 }
 
 1;
