@@ -21,6 +21,7 @@
     <UL>
       <LI><A HREF="#functions">Functions</A></LI>
         <UL>
+          <LI><A HREF="#function_errorcheck">ErrorCheck</A></LI>
           <LI>Exchange 5.5</LI>
           <UL>
             <LI><A HREF="#function_new">new</A></LI>
@@ -102,12 +103,19 @@ Kind of vague..  isn't it?<BR>
 Win32::Exchange uses Win32::OLE exclusively (and technically is just a wrapper for the
 underlying OLE calls) so feel free to look at them, and make a suggestion or two.<BR>
 <BR>
+Exchange 5.5 mailbox creation uses the LDAP interface on the Exchange server exclusively.  If the LDAP protocol
+is disabled on your Server, you will not be able to use this module until you turn it on.<BR>
+<BR>
+Exchange 2000 mailbox creation is a little bit different because it is based on COM objects, instead of LDAP,
+and you need the Exchange 2000 client tools loaded on the box you want to do the creation on in order to work
+correctly.  These are kind of modest requirements, but please check the NOTES section for more on software
+requirements and good ideas.<BR>
+<BR>
 All methods return 0 (or undef) on failure and 1 for success unless otherwise noted.<BR>
 <P>
 <H2><A NAME="functions">Functions</A></H2>
 <DL>
 <DT><STRONG><A NAME="function_new">$provider = Win32::Exchange-&gt;new($server_name | $version);</A></STRONG><BR>
-<DT><STRONG><A NAME="function_neu">$provider = Win32::Exchange::new($server_name | $version);</A></STRONG><BR>
 <DD>
 The <A HREF="#item_new"><CODE>new()</CODE></A> class method starts a new instance of an Exchange provider object.
 It returns a reference to this object or <B>undef</B> if the creation fails.<BR>
@@ -122,16 +130,24 @@ It returns a reference to this object or <B>undef</B> if the creation fails.<BR>
   <LI>If used, $server_name must NOT be prepended with backslashed</LI>
 </UL>
 <BR>
+$provider = Win32::Exchange-&gt;new($server_name); #new performs a check on your exchange server for versioning<BR>
+$provider = Win32::Exchange-&gt;new($version); #creates an object suitable for a $version server.. ("5.5" or "6.0")<BR>
+<BR>
 <A HREF="#function_GetVersion"><B>GetVersion</B></A> can return an acceptable version number for your Exchange server.
 <P></P>
-<DT><STRONG><A NAME="function_AddDLMembers">$provider-&gt;<CODE>AddDLMembers($info_store_server,$dl_name,\@new_dl_members);#Exchange 5.5</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function_AddDLMembers">$provider-&gt;<CODE>AddDLMembers($info_store_server,$dl_name,\@new_dl_members[,1]);#Exchange 5.5 sending an alias name</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function_AddDLMembers">$provider-&gt;<CODE>AddDLMembers($info_store_server,$dl_dn,\@new_dl_members);#Exchange 5.5 sending a "distinguished name"</CODE></A></STRONG><BR>
 <DT><STRONG><A NAME="function_AddDLMembers">$provider-&gt;<CODE>AddDLMembers($dl_name,\@new_dl_members);#Exchange 2000</CODE></A></STRONG><BR>
 <DD>
 The only noticable difference between Exchange 5.5 and 2000 for this call are the parameters sent to it, and the provider version that
 should be sent.  In either case, both functions check parameters and provider versions, so you shouldn't hit any snafus.<BR>
 <BR>
+The Exchange 5.5 version now accepts either that "alias name" or the "distinguished name" of both the distribution list and the mailbox.
+As well, the module can search for both the DL and MB "distinguished name" if you choose not to send it.  If you send an alias name and do
+not choose to search for it, the module will expect that your alias is in the default container.
+<BR>
   #Exchange 5.5<BR>
-  if ($provider->AddDLMembers($info_store_server,$dl_name,/@new_dl_members)) {<BR>
+  if ($provider->AddDLMembers($info_store_server,$dl_name,/@new_dl_members),1) { #Search for $dl_name<BR>
     print "Added members successfully\n";<BR>
   }<BR>
 <BR>
@@ -159,6 +175,24 @@ the CreateMailbox, you can pass the distinguished name of the "located" mailbox 
 and "mailbox store" names.<BR>
 <BR>
 <BR>
+<DT><STRONG><A NAME="function_errorcheck">Win32::Exchange::ErrorCheck($hex_error_str,$error_num,$error_name);</A></STRONG><BR>
+<DD>
+The <A HREF="#function_errorcheck"><CODE>ErrorCheck()</CODE></A> method takes an input value something similar to "0x00000000" where
+the string is the error you are expecting.  $error_num and $error_name are output variables if an error other than the value you expected has happenned.
+All values are checked against Win32::OLE->LastError for string comparisons.<BR>
+<BR>
+if (Win32::Exchange::ErrorCheck("0x80073020",$error_num,$error_name)) {<BR>
+  print "Mailbox does not exist.  Good...  Let's create it.\n";<BR>
+} else {<BR>
+  if ($error_num eq "0x00000000")) {<BR>
+    print "OOPS..  The mailbox already exists!!!\n";<BR>
+  } else {<BR>
+    print "Unexpected error getting mailbox! ($error_num,$error_name)\n";<BR>
+  }<BR>
+}<BR>
+<BR>
+<BR>
+
 <DT><STRONG><A NAME="function_GetDistinguishedName">Win32::Exchange::GetDistinguishedName($server_name,$serach_object,$result);</CODE></A></STRONG><BR>
 <DD>
 The GetDistinguishedName function takes the Server name you want to query, an object type (or properly formatted ADODB filter, see below) and returns
@@ -197,13 +231,24 @@ eventually create a mailbox) as provided by <A HREF="#function_LocateMailboxStor
 <BR>
 <DT><STRONG><A NAME="function_GetMailbox"></A></STRONG><BR>
 <DT><STRONG><A NAME="function__E55GetMailbox">$provider-&gt;<CODE>GetMailbox($server_name,$mailbox_name,[$org,$ou]);</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function__E55GetMailbox">$provider-&gt;<CODE>GetMailbox($server_name,$mailbox_name,[1]);#Exchange 5.5</CODE></A></STRONG><BR>
 <DD>
 The <A HREF="#function_GetMailbox"><CODE>GetMailbox()</CODE></A> function is implemented for Exchange 5.5 and 2000.<BR>
 <BR>
 The base object that is returned for Exchange 2000 mailboxes is the LDAP user object, and the object that is returned for Exchange 5.5 is
 the 5.5 mailbox object.<BR>
 <BR>
+Optionally, you can tell the function to search for your object if it does not reside in the default container (cn=Recipients,ou=yourOU,o=YourO),
+or send it the "distinguished name" of your obhect.<BR>
+<BR>
   $mailbox = $provider->GetMailbox($info_store_server,$mailbox_alias_name,$org,$ou);<BR>
+  if ($mailbox) {<BR>
+    print "Mailbox exists\n";<BR>
+  }<BR>
+<BR>
+- OR - when you want to search for the mailbox... (Exchange 5.5 only)<BR>
+<BR>
+  $mailbox = $provider->GetMailbox($info_store_server,$mailbox_alias_name,1);<BR>
   if ($mailbox) {<BR>
     print "Mailbox exists\n";<BR>
   }<BR>
@@ -535,13 +580,13 @@ I'd like to extend thanks to the following:<BR>
   <LI>Dave Roth, in part for advice and comments on my code, and then also for offering to host the PPM for this module!</LI>
   <LI><P>Jan Dubois &lt;<A HREF="mailto:jand@activestate.com">jand@activestate.com</A>&gt; and Everyone at Activestate for Win32::OLE, without which this module wouldn't be possible.</LI>
   <LI>Activestate, for having the mailing list archive chock-full-o' source code and answers to questions asked and answered way too many times!</LI>
-  <LI>Microsoft...  for exposing the Exchange mailbox interface, &lt;sarcasm&gt;and for NOT updating their documentation on the MSDN Developer network website regarding the ability to programatically change permissions on mailboxes (and suggesting that you can't do it) &lt;/sarcasm&gt;</LI>
+  <LI>Microsoft...  for exposing the Exchange 2000 mailbox interface, &lt;sarcasm&gt;and for NOT updating their documentation on the MSDN Developer network website regarding the ability to programatically change permissions on mailboxes (and suggesting that you can't do it) &lt;/sarcasm&gt;</LI>
 </UL>
 <BR>
 <P>Please send questions, comments or suggestions about this module to Steven Manross &lt;<A HREF="mailto:steven@manross.net">steven@manross.net</A>&gt.</P>
 <HR>
 <H1><A NAME="version">VERSION</A></H1>
-<P>Version 0.0.0.028     September 11, 2002</P>
+<P>Version 0.0.0.032     November 15, 2002</P>
 <H1><A NAME="copyright">Copyright</A></H1>
 Microsoft, Active Directory, ADSI, Windows, Windows NT, MSDN, and Exchange are either registered trademarks or trademarks of Microsoft Corporation in the United States and/or other countries.<BR>
 <BR>

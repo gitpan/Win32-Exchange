@@ -63,6 +63,17 @@ if ($ver{ver} eq "5.5") {
       print "GetOwner failed\n";  
     }
 
+    $mailbox->GetPerms(\@array);
+    
+    foreach my $acl (@array) {
+      print "   trustee - $acl->{Trustee}\n";  
+      print "accessmask - $acl->{AccessMask}\n";  
+      print "   acetype - $acl->{AceType}\n";  
+      print "  aceflags - $acl->{AceFlags}\n";  
+      print "     flags - $acl->{Flags}\n";  
+      print "   objtype - $acl->{ObjectType}\n";  
+      print "inhobjtype - $acl->{InheritedObjectType}\n";  
+    }
 
     if ($mailbox->SetPerms(\@PermsUsers)) {
       print "Successfully set perms\n";  

@@ -1,5 +1,52 @@
 Version History
 ------------------------
+2002/11/15 -     0.032   -Changed _AdodbExtendedSearch so it used a "paged search", and so that GetVersion would return a result set
+                          even if the result set was larger than the allowed maximum (currently default set to 100 in Exchange 5.5).
+                         -Changed _AdodbExtendedSearch so that a non-fuzzy search would also be case-insensitive.
+                         -Changed new so that if you pass new a server name, and it must perform a GetVersion to determine what to create,
+                          it could do so and create the object for return to the perl script.
+                         -Modified GetVersion so it would supress the "Class not Found" error if the workstation did not have the E2K
+                          tools loaded, as it tries to create a "CDOEXM.ExchangeServer" object (if the tools aren't loaded, the user doesn't
+                          need to know that a class was not found, because they aren't worried about a class, just the version).
+                         -Changed AddDLMembers and _E55GetMailbox to add:
+                                -the ability to search for the "distinguishedname" of the DL and of the mailbox you want to add
+                                -the ability to send buth functions either an alias or distinguishedname of the mailbox and/or the DL.
+                         -This version is dedicated to:  Mr. Peter Thoenen EPS (e-mail supressed for confidentiality), who came to me with
+                          the problems above, and didn't give up on me, even after a week (actually more like a month) of playing e-mail tag
+                          and going through endless "check this value" tag.....  But we finally worked through the problems and now you have
+                          build 032.
+                         -Made a change _E2KCreateMailbox to take heed of:
+                              http://support.microsoft.com/default.aspx?scid=kb;EN-US;q321039
+                          to correct errors in E2K creation that I did not experience in my testing.
+                            - Thanks to Jeremy D. Brinkman (e-mail supressed for confidentiality) for being a guinea pig on this update.
+                                I knew about this as a potential issue, but hadn't experienced it in testing.
+                         -Added to the docs based on feedback.
+                          
+2002/10/04 -     0.031   -Changed GetVersion for 5.5 to query the individual Exchange Servers and not AD.
+                              -If there is a domain that you query that does not have:
+                                  -an AD Connector to an AD domain, or
+                                  -a non-AD domain,
+                                the old way would fail.
+                         -Also changed default behavior of GetVersion if the E2K Tools were isntalled so that it
+                           tries using the E2K tools, and on failure tries the E55 Tools.
+                         -Added Const.pm for constants instead of declaring them at the top of the module.
+2002/09/19 -     0.030   -Removed all the individual Win32::OLE::Warn statements and added one in new
+                            and a return to the original value in DESTROY.
+                              -hopefully that fixes a reset of Win32::OLE->LastError in the CreateMailbox sub.
+                         -Removed dependency on Win32::Exchange::Const for now until I rework it better. 
+                             -We're back to staticly assigned local variables.
+                                 changing them to use const ADS_SID_WINNT_PATH = 0x1 wouldn't be all that difficult,
+                                 but I will wait for another release.
+                         -Renamed _ErrorCheck to ErrorCheck.
+                         -Removed the check in _E55CreateMailbox where it tested to see if the mailbox existed first.
+                         -Removed the check in _E55CreateMailbox where it tested to see if the mailbox existed first.
+                             --Doesn't belong in CreateMailbox....  (You should test with GetMailbox first if you want to do that).
+                         -Fixed a bless that wasn't reblessing a Win32::Exchange object for later use in CreateMailbox.. Subsequent calls to
+                            SetAttributes, SetPerms, SetOwner or other functions would fail.
+                         -Added a _DebugComment to SetAttributes for each attribute at debug level 3.
+2002/09/12 -     0.029   -Added GetPerms (5.5 and 2K).  --2K untested.
+                             -I should probably modify SetPerms so it accepts that same format that GetPerms returns.
+                         -I've already built Win32::Exchange::Const, but haven't finished/tested/incorporated it into Win32::Exchange.
 2002/09/11 -     0.028   -Added GetOwner (5.5 only).
                          -Updated HTML docs to include reference to GetMailbox being a E2K friendly function.
 2002/08/29 -     0.027   -Changed the function of DebugComment, to allow for severity of an impending print statement.

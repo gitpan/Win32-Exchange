@@ -7,21 +7,23 @@ Common Errors
          for would be registered
 0x80020003 Member Not Found
   Desc:  Some issues can be fixed by reinstalling a current MDAC and/or ADS (NT4 only)
-         As well, this could be an older LetProperty issue with a SecurityDescriptor
+         As well, this could be an older LetProperty issue with a SecurityDescriptor.
+           --make sure you have a recent build of ActivePerl (AS631 or AS633) and Win32-Exchange.
 0x8007203a LDAP Server Down
   Desc: (see readment4.txt if you use NT4 to communicate with your exchange servers,
         but check the obvious...  did someone turn your server off?
 0x800708ad - The user name could not be found
   Desc:  self explanatory...
 0x80072021 - A Protocol Error occurred
-  Desc: (Chances are that you've tried to set an invalid value)
+  Desc: Chances are that you've tried to set an invalid value
 0x80005000 - Invalid AD Path
   Desc: If you are creating a new mailbox, Check to see that this ad path doesn't exist
         somewhere as a custom recipient or a hidden Mailbox.  This usually happens on E55
-        when creating a new mailbox (your directory name looks to be already in use).
+        when creating a new mailbox (your create is trying to use a directory name that
+        looks to be already in use).
 0x8000500d - Property Not Found
   Desc:  Are you sure that you know what you are looking for, that property
- doesn't seem to exist.
+         doesn't seem to exist.
 0x80004001 - Not Implemented
   Desc:  The function you are using doesn't have a way to do what you are asking it to do.
 0x80072030 - Object Does Not Exist/No Such Object
