@@ -1,0 +1,63 @@
+Version History
+------------------------
+2002/08/18 - 0.0.0.021   Registered with CPAN,
+                           -Requested Win32-Exchange as our namespace.
+                         Added "fuzzy" search for $server_name in _AdodbExtendedSearch
+                             Allowed for getting Home-MTA and Home-MBD programatically instead of linking strings together
+2002/08/18 - 0.0.0.020   Added HTML Documentation, and invited perl-win32-users & admins for a look.
+2002/08/18 - 0.0.0.019   Modified SetOwner and SetPerms to only take ("Domain\User"), and not ("PDC","Domain\User")
+                             -In SetOwner's case, if the Username was "domain name-prepended", I overrode the pdc value anyway.
+                             -In SetPerms' case, I didn't use the pdc value.
+                         Added an HTML page chock-full-o' documentation, thank yous, and links to other useful sites.
+2002/08/18 - 0.0.0.018   Mostly housekeeping.  I commented _E2kGetMailbox, because the underlying object is
+                           a User Account, and there's nothing it can hold on to or allow you to do with it.
+                         -P.S. There's no SetPerms for E2K, and that may be a problem, however
+                           It's 11 days old, and I don't expect it to be complete.  :(
+2002/08/18 - 0.0.0.017   Added AdodbExtendedSearch to accomplish more than AdodbSearch could (Eventually,
+                           I think AdodbSearch will be deprecated.)
+                         It seems that I broke some Exchange 5.5 (GetLDAPPath) stuff while making
+                            the 2K stuff work.  That's fixed again. (And tested on 5.5 and on 2K)
+2002/08/18 - 0.0.0.016   Changed Module name again.  Win32::Exchange (no code changes)
+2002/08/18 - 0.0.0.015   Worked on GetMailbox for 5.5/E2K.  Samples look good (I need to test both, but haven't).
+                               I feel more comfortable with the 5.5 routine, and have doubts about the 2K routine.
+2002/08/17 - 0.0.0.014   Worked on SetAttributes for E2K.  Samples look good and work.
+                           -A warning again. Be careful with ProxyAddresses/otherMailbox.
+                            You are overwriting anything that previously existed (for now).
+2002/08/16 - 0.0.0.013   Added 5th optional param to LocateMailboxStore for returning how many sg's and mb's there are
+2002/08/16 - 0.0.0.012   Pulled out LocateMailboxStore code to it's own sub and created EnumStorageGroups and _TraverseStorageGroups
+                         for use by LocateMailboxStore.
+2002/08/16 - 0.0.0.011   Added if ($DEBUG) to all the internal print Statements, and made DEBUG an external settable option.
+                          (use Win32::MSExchange qw ('DEBUG' => 1);
+2002/08/16 - 0.0.0.010   GetVersion worked, but I reworked it as a CDOEXM.ExchangeServer call, instead of
+                           the &AdodbSearch call...  It was a lot less code...
+2002/08/16 - 0.0.0.009   Retooled GetVersion and rethought the logic behind it..  I think it will now work again.
+2002/08/16 - 0.0.0.008   Changed name of package to Win32::MSExchange (no code modifiactons)
+2002/08/15 - 0.0.0.007   get_version seemed to disappear as of v002.  :(
+                           --reinstated.  I need to look at backwards compatability, but
+                           CDO may have an easier,better method for extracting this info.
+                             --It would probably be dependent on the E2K Client tools though... :(
+2002/08/15 - 0.0.0.006   The Exchange 2000 Mailbox creates are finally working...
+                           I need to work on setting attributes.
+2002/08/14 - 0.0.0.005   I found how to enum storage groups instead of manually piecing them together by hand..  whew...
+                         I removed one of the adodb_searches with this.
+2002/08/13 - 0.0.0.004   Converted GetLDAPPath and and get_distinguished_name calls to surrogate adodb_search
+                         Added compliance for the use of the "strict" module.
+                         Pulled out a duplicate Create_Mailbox_2K sub...  OOPS....
+                         Allowed for CreateMailbox to determine what mailbox you should create
+                           by looking at the underlying object that was passed (that was fun) and
+                           pass you to the right sub (Create_MBX_55 -or- Create_MBX_2K).
+                         Added friendly error messages to help when:
+                           -"CDOEXM" methods, or
+                           -"ADsSecurity" methods are unavailable.
+                           
+2002/08/12 - 0.0.0.003   converted GetLDAPPath to use an ADO model instead of a recursive LDAP call.
+                           -faster & less code
+                         I have code that will pull version info from 2K servers, but it only seems to work within your domain.
+                           -I need to test to see if I can give it a domain name to check.....
+2002/08/12 - 0.0.0.002   Added get_version so I could start determining which servers were 5.5, so
+                         I can conversely determine 2000 servers.
+2002/08/09 - First Rev.  I finally got all the way through with the create, set attrs, perms, owner and dl additions
+                               -I added a ton of error-checking in the add_members_to_dl.
+2002/08/07 - First Rev.  I took the create_mailboxes subroutine from my Users.pl script and started hacking it
+                         away into managable/meaningful chunks.
+                           -I had fun writing GetLDAPPath...  It finds out what OU a server belongs to.

@@ -1,0 +1,2 @@
+Setting permissions on Exchange 2000 mailboxes isn't implemented yet (revision 21).
+_E2KSetPerms does not work (revision  21)
