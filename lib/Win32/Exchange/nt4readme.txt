@@ -1,16 +1,3 @@
-This is the culmination of 3 years of work in building Exchange Mailboxes, but now as a module.
-Some peculiarities in setting an "AccessControlEntry" may prohibit you from using and older
-version of Win32::OLE (<.1502) with this code.  Sorry.  :(
-
-I'd like to thank Andrew Bastien for answering numerous questions when I was an OLE newbie, for most of the
-  original code (~1999), and helping me debug some problems with it at that time.
-
-This module uses Win32::OLE exclusively and is really just a wrapper for a lot of OLE calls.
-
-OS Requirements: WinNT (Untested, should work, Requires ADSI 2.5 and ADSI SDK, however, see note below),
-                 Win2K (Tested, works well),
-                 WinXP (Untested, should work)
-
 ********Note for users using NT4.  The following announcement is largely conjecture, but:
 
 If you find yourself using NT4 with this module and then suddenly, without notice you start recieving:

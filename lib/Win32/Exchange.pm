@@ -26,7 +26,7 @@ Win32::OLE->Initialize(Win32::OLE::COINIT_OLEINITIALIZE);
 #Win32::OLE->Option('_Unique' => 1);
 #@ISA = qw(Win32::OLE);
 
-my $VERSION = "0.025";
+my $VERSION = "0.027";
 my $DEBUG = 1;
 
 #CONSTANTS
@@ -40,7 +40,7 @@ my $ADS_RIGHT_EXCH_MAIL_RECEIVE_AS = 0x10;       #
 my $ADS_ACETYPE_ACCESS_ALLOWED = 0x00;           #
 ##################################################
 
-####Contsants used with OpenDSObject######  NOT USED YET
+####Constants used with OpenDSObject######  NOT USED YET
 my $ADS_SECURE_AUTHENTICATION  = 0x1;    #
 my $ADS_USE_ENCRYPTION         = 0x2;    #
 my $ADS_USE_SSL                = 0x2;    #
@@ -99,7 +99,7 @@ sub new {
     if ($ldap_provider = Win32::OLE->new('ADsNamespaces')) {
       return bless $ldap_provider,$class;
     } else {
-      _DebugComment("Failed creating ADsNamespaces object");
+      _DebugComment("Failed creating ADsNamespaces object\n",1);
       return undef;
     }
   } elsif ($ver eq "6.0") {
@@ -107,11 +107,11 @@ sub new {
     if ($ldap_provider = Win32::OLE->new('CDO.Person')) {
       return bless $ldap_provider,$class;
     } else {
-      _DebugComment("Failed creating CDO.Person object\n");
+      _DebugComment("Failed creating CDO.Person object\n",1);
       return undef;
     }
   } else {
-    _DebugComment("Unable to verify version information for version: $ver\n");
+    _DebugComment("Unable to verify version information for version: $ver\n",1);
     return undef;
   }
 }
@@ -141,21 +141,21 @@ sub GetLDAPPath {
   }
   my $result;
   if (_AdodbExtendedSearch($server_name,"LDAP://$server_name","(objectClass=Computer)","rdn,distinguishedName",$result)) {
-    _DebugComment("result = $result\n");
+    _DebugComment("result = $result\n",2);
     if ($result =~ /cn=.*,cn=Servers,cn=Configuration,ou=(.*),o=(.*)/) {
       my $returned_ou = $1;
       my $returned_o = $2;
       $_[$return_point]=$returned_o;
       $_[($return_point+1)]=$returned_ou;
-      _DebugComment("ou=$returned_ou\no=$returned_o\n");
+      _DebugComment("ou=$returned_ou\no=$returned_o\n",2);
       return 1;
     } else {
-      _DebugComment("result = $result\n");
-      _DebugComment("result from ADODB search failed to produce an acceptable match\n");
+      _DebugComment("result = $result\n",2);
+      _DebugComment("result from ADODB search failed to produce an acceptable match\n",1);
       return 0;
     }
   } else {
-    _DebugComment("ADODB search failed\n");
+    _DebugComment("ADODB search failed\n",1);
     return 0;  
   }
 }
@@ -170,7 +170,7 @@ sub GetVersion {
     if ($_[0] eq "Win32::Exchange") {
       $server_name = $_[1];
     } else {
-      _DebugComment("Error encountered processing arguments (3 args were passed)\n");
+      _ReportArgError("GetVersion",scalar(@_));
       return 0;
     }
   } else {
@@ -180,24 +180,24 @@ sub GetVersion {
 
   my $serial_val;
   my $serial_version_check_obj = Win32::OLE->new('CDOEXM.ExchangeServer'); #substantiates the possible existance of e2k
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
     if ($error_num eq "0x80040154" ||
         $error_num eq "0x800401f3") {
       #0x80040154 Class not registered
       #0x800401f3 Invalid class string
-      _DebugComment("The Exchange 2000 client tools don't look to be installed on this machine\n");
+      _DebugComment("The Exchange 2000 client tools don't look to be installed on this machine\n",2);
       if (!_E55VersionInfo($server_name,$serial_val)) {
-        _DebugComment("Error getting version information from Exchange 5.5\n");
+        _DebugComment("Error getting version information from Exchange 5.5\n",1);
         return 0;
       }
     } else {
-      _DebugComment("error: $error_num - $error_name on $server_name encountered while trying to perform GetVersion\n");
+      _DebugComment("error: $error_num - $error_name on $server_name encountered while trying to perform GetVersion\n",1);
       return 0;
     }
   } else {
-    _DebugComment("found e2k tools, so we'll look and see what version of Exchange you have.\n");
+    _DebugComment("found e2k tools, so we'll look and see what version of Exchange you have.\n",3);
     if (!_E2kVersionInfo($server_name,$serial_val)) {
-      _DebugComment("Error getting version information from Exchange 2000\n");
+      _DebugComment("Error getting version information from Exchange 2000\n",1);
       return 0;
     }
   }
@@ -207,9 +207,9 @@ sub GetVersion {
     $return_struct{ver}= $1;
     $return_struct{build}= $2;
     $return_struct{sp}= $3;
-    #if ($return_struct{sp} < 2 && $return_struct{ver} eq "6.0") {
-    #  _DebugComment("It's possible that some of the E2K permissions functions will fail due to an incompatible E2K Service Pack level (please see the HTML docs for details)\n")
-    #}
+    if ($return_struct{sp} < 2 && $return_struct{ver} eq "6.0") {
+      _DebugComment("It's possible that some of the E2K permissions functions will fail due to an incompatible E2K Service Pack level (please see the HTML docs for details)\n",2)
+    }
     if (scalar(@_) == 2) {
       %{$_[1]} = %return_struct;
     } else {
@@ -232,12 +232,12 @@ sub _E55VersionInfo {
     return 0;
   }
   my $serial_val;
-  if (_AdodbExtendedSearch($server_name,"rootdse-configurationnamingcontext","(objectCategory=msExchExchangeServer)","name,serialNumber",$serial_val)) {
+  if (_AdodbExtendedSearch($server_name,"LDAP://RootDSE/configurationNamingContext","(objectCategory=msExchExchangeServer)","name,serialNumber",$serial_val)) {
     if ($serial_val =~ /Version (.*) \(Build (.*): Service Pack (.*)\)/i) {
       $_[1] = $serial_val;
       return 1;
     } else {
-      _DebugComment("GetVersion failed to produce acceptable results (E55)\n");
+      _DebugComment("GetVersion failed to produce acceptable results (E55)\n",1);
       return 0;
     }
   }
@@ -251,13 +251,13 @@ sub _E2kVersionInfo {
   }
   my $server_name = $_[0];
   my $exchange_server = Win32::OLE->new("CDOEXM.ExchangeServer");
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-      _DebugComment("Failed creating object for version information (E2K) on $server_name -> $error_num ($error_name)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("Failed creating object for version information (E2K) on $server_name -> $error_num ($error_name)\n",1);
       return 0;
   }
   $exchange_server->DataSource->Open($server_name);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-      _DebugComment("Failed opening object for version information (E2K) on $server_name -> $error_num ($error_name)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("Failed opening object for version information (E2K) on $server_name -> $error_num ($error_name)\n",1);
       return 0;
   }
 
@@ -269,7 +269,7 @@ sub _E2kVersionInfo {
     $_[1] = $exchange_server->{ExchangeVersion};
     return 1;
   } else {
-    _DebugComment("Failed failed to produce valid version info for $server_name\n");
+    _DebugComment("Failed failed to produce valid version info for $server_name\n",1);
     return 0;
   }
 }
@@ -307,14 +307,17 @@ sub AdodbSearch {
   $Conn->Win32::OLE::Open("Active Directory Provider;UID=;PWD=");
   my $path = "<$ldap_path>;$filter;$columns;subtree";
   my $RS = $Conn->Win32::OLE::Execute($path);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("path=$ldap_path\nfilter=$filter\ncolumns=$columns\nFailed Executing ADODB Execute command on $server_name -> $error_num ($error_name)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("path=$ldap_path\nfilter=$filter\ncolumns=$columns\n",2);
+    _DebugComment("Failed Executing ADODB Execute command on $server_name -> $error_num ($error_name)\n",1);
     return 0;
   }
   if ($RS->RecordCount == 0) {
-    _DebugComment("path=$ldap_path\nfilter=$filter\ncolumns=$columns\nAdodbSearch yeilded no results for search on $server_name -> $error_num ($error_name)\n");
+    _DebugComment("path=$ldap_path\nfilter=$filter\ncolumns=$columns\n",2);
+    _DebugComment("AdodbSearch yeilded no results for search on $server_name -> $error_num ($error_name)\n",1);
   } elsif ($RS->RecordCount > 1) {
-    _DebugComment("path=$ldap_path\nfilter=$filter\ncolumns=$columns\nAdodbSearch yeilded more than 1 result for search on $server_name -> $error_num ($error_name)\n");
+    _DebugComment("path=$ldap_path\nfilter=$filter\ncolumns=$columns\n",2);
+    _DebugComment("AdodbSearch yeilded more than 1 result for search on $server_name -> $error_num ($error_name)\n",1);
     return 0;
   } else {
     $_[$return_point] = $RS->Fields($ado_columns[1])->value 
@@ -347,78 +350,86 @@ sub _AdodbExtendedSearch {
   }
   my @cols = split (/,/,$columns);
   if (scalar(@cols) != 2) {
-    _DebugComment("Only 2 columns can be sent to _AdodbExtendedSearch (total recieved = ".scalar(@cols).")\n");
+    _DebugComment("Only 2 columns can be sent to _AdodbExtendedSearch (total recieved = ".scalar(@cols).")\n",1);
   }
   my $option;
   if ($path =~ /^LDAP:\/\/RootDSE\/(.*)/i) {
     $option = $1;
     my $RootDSE = Win32::OLE->GetObject("LDAP://RootDSE");
-    if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-      _DebugComment("Failed creating object for _AdodbExtendedSearch on $server_name -> $error_num ($error_name)\n");
+    if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("Failed creating object for _AdodbExtendedSearch on $server_name -> $error_num ($error_name)\n",1);
       return 0;
     }
     my $actual_ldap_path = $RootDSE->Get($option);
-    if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-      _DebugComment("Failed creating object for _AdodbExtendedSearch on $server_name -> $error_num ($error_name)\n");
+    if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("Failed creating object for _AdodbExtendedSearch on $server_name -> $error_num ($error_name)\n",1);
       return 0;
     }
     $path = "LDAP://".$actual_ldap_path;
   }
   my $string = "<$path>;$filter;$columns;subtree";
   my $Com = Win32::OLE->new("ADODB.Command");
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-      _DebugComment("path=$path\nfilter=$filter\ncolumns=$columns\nFailed creating ADODB.Command object for _AdodbExtendedSearch on $server_name -> $error_num ($error_name)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("path=$path\nfilter=$filter\ncolumns=$columns\n",2);
+      _DebugComment("Failed creating ADODB.Command object for _AdodbExtendedSearch on $server_name -> $error_num ($error_name)\n",1);
       return 0;
   }
   my $Conn = Win32::OLE->new("ADODB.Connection");
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-      _DebugComment("path=$path\nfilter=$filter\ncolumns=$columns\nFailed creating ADODB.Connection object for version information (E55) on $server_name -> $error_num ($error_name)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("path=$path\nfilter=$filter\ncolumns=$columns\n",2);
+      _DebugComment("Failed creating ADODB.Connection object for version information (E55) on $server_name -> $error_num ($error_name)\n",1);
       return 0;
   }
   $Conn->{'Provider'} = "ADsDSOObject";
   $Conn->Open("ADs Provider");
   $Com->{ActiveConnection} = $Conn;
   my $RS = $Conn->Execute($string);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-      _DebugComment("path=$path\nfilter=$filter\ncolumns=$columns\nFailed executing ADODB.Command for version information (E55) on $server_name -> $error_num ($error_name)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("path=$path\nfilter=$filter\ncolumns=$columns\n",2);
+      _DebugComment("Failed executing ADODB.Command for version information (E55) on $server_name -> $error_num ($error_name)\n",1);
       return 0;
   }
   my $not_found = 1;
-  my $search_val;
-  while ($not_found == 1) {
-    if ($fuzzy == 1) {
-      if ($RS->Fields($cols[1])->value =~ /$server_name/i) {
-        if (ref($RS->Fields($cols[1])->value) eq "ARRAY") {
+  my $search_val = "";
+  while ($search_val eq "") {
+    if ($fuzzy != 0) {
+      _DebugComment("fuzzy=$fuzzy\n",2);
+      if ($RS->Fields($cols[($fuzzy - 1)])->value =~ /$server_name/i) {
+        if (ref($RS->Fields($cols[($fuzzy - 1)])->value) eq "ARRAY") {
+          _DebugComment("found ".@{$RS->Fields($cols[1])->value}[0]."\n",3);
           $search_val = @{$RS->Fields($cols[1])->value}[0]; 
+          $_[$return_point] = $search_val;
+          return 1;
         } else {
+          _DebugComment("found ".$RS->Fields($cols[1])->value."\n",3);
           $search_val = $RS->Fields($cols[1])->value; 
+          $_[$return_point] = $search_val;
+          return 1;
         }
-        $not_found = 0;
       }
     } else {
       if ($server_name eq $RS->Fields($cols[0])->value) {
         if (ref($RS->Fields($cols[1])->value) eq "ARRAY") {
           $search_val = @{$RS->Fields($cols[1])->value}[0]; 
+          $_[$return_point] = $search_val;
+          return 1;
         } else {
           $search_val = $RS->Fields($cols[1])->value; 
+          $_[$return_point] = $search_val;
+          return 1;
         }
-        $not_found = 0;
       }
     }
+    _DebugComment($RS->Fields($cols[0])->value." - ".$RS->Fields($cols[1])->value."\n",3);
     if ($RS->EOF) {
-      $not_found = -1;
+      $search_val = "-1";
     }
-    if ($not_found == 1) {
-      #print $RS->Fields($cols[0])->value." - ".$RS->Fields($cols[1])->value."\n";
-      $RS->MoveNext;
-    }        
+    $RS->MoveNext;
   }
-  if ($not_found == -1) {
-    _DebugComment("Unable to match valid data for your search on $server_name\n");
+  if ($search_val eq "-1") {
+    _DebugComment("Unable to match valid data for your search on $server_name\n",1);
     return 0;
   }
-  $_[$return_point] = $search_val;
-  return 1;
 }
 
 sub LocateMailboxStore {
@@ -433,7 +444,7 @@ sub LocateMailboxStore {
         if (ref($_[5]) eq "ARRAY") {
           $count = "yes";
         } else {
-          _DebugComment("the fifth argument passed to LocateMailboxStore must be an array (but is optional).\n");
+          _DebugComment("the fifth argument passed to LocateMailboxStore must be an array (but is optional).\n",1);
           return 0;  
         }
       } else {
@@ -451,7 +462,7 @@ sub LocateMailboxStore {
         if (ref($_[4]) eq "ARRAY") {
           $count = "yes";
         } else {
-          _DebugComment("the fifth argument passed to LocateMailboxStore must be an array (but is optional).\n");
+          _DebugComment("the fifth argument passed to LocateMailboxStore must be an array (but is optional).\n",1);
           return 0;  
         }
       } else {
@@ -482,11 +493,11 @@ sub LocateMailboxStore {
       $_[3] = $ldap_path;
       return 1;
     } else {
-      _DebugComment("Unable to locate valid mailbox store for mailbox creation.\n");
+      _DebugComment("Unable to locate valid mailbox store for mailbox creation.\n",1);
       return 0;          
     }
   } else {
-    _DebugComment("Unable to locate valid storage group for mailbox creation.\n");
+    _DebugComment("Unable to locate valid storage group for mailbox creation.\n",1);
     return 0;          
   }
 }
@@ -504,14 +515,14 @@ sub _EnumStorageGroups {
   my $exchange_server = Win32::OLE->new("CDOEXM.ExchangeServer");
 
   $exchange_server->DataSource->Open($server_name);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("Failed opening ADODB ExchangeServer object for Storage Group enumeration on $server_name -> $error_num ($error_name)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Failed opening ADODB ExchangeServer object for Storage Group enumeration on $server_name -> $error_num ($error_name)\n",1);
     return 0;
   }
 
   my @storegroups = Win32::OLE::in($exchange_server->StorageGroups);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("Failed enumerating Storage Groups on $server_name -> $error_num ($error_name)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Failed enumerating Storage Groups on $server_name -> $error_num ($error_name)\n",1);
     return 0;
   }
   my %storage_groups;
@@ -519,10 +530,10 @@ sub _EnumStorageGroups {
   my $mbx_store_obj = Win32::OLE->new("CDOEXM.MailboxStoreDB");
   foreach my $storegroup (@storegroups) {
     $stor_group_obj->DataSource->Open($storegroup);
-    _DebugComment("Stor Name = ".$stor_group_obj->{Name}."\n");
+    _DebugComment("Stor Name = ".$stor_group_obj->{Name}."\n",3);
     foreach my $mbx_store (Win32::OLE::in($stor_group_obj->{MailboxStoreDBs})) {
       $mbx_store_obj->DataSource->Open($mbx_store);
-      _DebugComment("  Mailbox Store = $mbx_store_obj->{Name}\n");
+      _DebugComment("  Mailbox Store = $mbx_store_obj->{Name}\n",3);
       $storage_groups{$stor_group_obj->{Name}}{$mbx_store_obj->{Name}}=$mbx_store;
     }
   }
@@ -537,7 +548,7 @@ sub _TraverseStorageGroups {
     return 0;
   }
   if (ref($_[0]) ne "HASH") {
-    _DebugComment("Storage group object is not a hash\n");
+    _DebugComment("Storage group object is not a hash\n",1);
     return 0;
   }
   my %storage_groups = %{$_[0]};
@@ -546,7 +557,7 @@ sub _TraverseStorageGroups {
   my $mb_store = $_[3];
   my $ldap_path;
   if (scalar(keys %storage_groups) == 0) {
-      _DebugComment("No Storage Groups were found\n");
+      _DebugComment("No Storage Groups were found\n",1);
       return 0;
   }
   my $sg;
@@ -561,7 +572,7 @@ sub _TraverseStorageGroups {
           next;
         }
       }
-      _DebugComment("Error locating proper storage group and mailbox db for mailbox creation (1SG)\n");
+      _DebugComment("Error locating proper storage group and mailbox db for mailbox creation (1SG)\n",1);
       return 0;
     } elsif ($sg eq $storage_group && $storage_group ne "") {
       foreach $mb (keys %{$storage_groups{$sg}}) {
@@ -572,7 +583,7 @@ sub _TraverseStorageGroups {
           next;
         }
       }
-      _DebugComment("Error locating proper storage group and mailbox db for mailbox creation (2+SG)\n");
+      _DebugComment("Error locating proper storage group and mailbox db for mailbox creation (2+SG)\n",1);
       return 0;
     }
   }
@@ -588,8 +599,8 @@ sub CreateMailbox {
   
   Win32::OLE->LastError(0);
   my $type = Win32::OLE->QueryObjectType($provider);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("failed querying OLE Object for Exchange Server Determination for CreateMailbox ($error_num)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("failed querying OLE Object for Exchange Server Determination for CreateMailbox ($error_num)\n",1);
     bless $provider,"Win32::Exchange";
     return 0;
   }
@@ -597,14 +608,19 @@ sub CreateMailbox {
   if ($type eq "IPerson") {
     #IPerson returns for CDO.Person (E2K)
     if ($mbx = _E2KCreateMailbox(@_)) {
+      bless $provider,"Win32::Exchange";
+      bless $mbx,"Win32::Exchange";
       return $mbx;
     }
   } else {
     #nothing returns for ADsNamespaces (E5.5)
     if ($mbx = _E55CreateMailbox(@_)) {
+      bless $provider,"Win32::Exchange";
+      bless $mbx,"Win32::Exchange";
       return $mbx;
     }
   }
+  bless $provider,"Win32::Exchange";
   return 0;
 }
 
@@ -622,9 +638,9 @@ sub _E55CreateMailbox {
     $mailbox_alias_name = $_[2];
     if (scalar(@_) == 3) {
       if ($ldap_provider->GetLDAPPath($information_store_server,$org,$ou)) {
-        _DebugComment("returned -> o=$org,ou=$ou\n");
+        _DebugComment("returned -> o=$org,ou=$ou\n",3);
       } else {
-        _DebugComment("Error Returning from GetLDAPPath\n");
+        _DebugComment("Error Returning from GetLDAPPath\n",1);
         return 0;
       }
     } elsif (scalar(@_) == 5) {
@@ -639,12 +655,11 @@ sub _E55CreateMailbox {
     return 0;
   }
   my $recipients_path = "LDAP://$information_store_server/cn=Recipients,ou=$ou,o=$org";
-  _DebugComment("$recipients_path\n");
+  _DebugComment("$recipients_path\n",3);
   bless $ldap_provider,"Win32::OLE";
   my $Recipients = $ldap_provider->GetObject("",$recipients_path);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("Failed opening recipients path on $information_store_server\n");
-    bless $ldap_provider,"Win32::Exchange";
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Failed opening recipients path on $information_store_server\n",1);
     return 0;
   }
 
@@ -652,27 +667,24 @@ sub _E55CreateMailbox {
   $Win32::OLE::Warn = 0; #Turn STDERR warnings off because we probably are going to get an error (0x80072030)
 
   $Recipients->GetObject("organizationalPerson", "cn=$mailbox_alias_name");
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x80072030",$error_num,$error_name)) {
+  if (!_ErrorCheck("0x80072030",$error_num,$error_name)) {
     if ($error_num eq "0x00000000") {
-      _DebugComment("$error_num - Mailbox already exists on $information_store_server\n");
+      _DebugComment("$error_num - Mailbox already exists on $information_store_server\n",1);
       $Win32::OLE::Warn=$original_ole_warn_value;
-      bless $ldap_provider,"Win32::Exchange";
       return 0;
     } else {
-      _DebugComment("Unable to lookup object $mailbox_alias_name on $information_store_server ($error_num)\n");
+      _DebugComment("Unable to lookup object $mailbox_alias_name on $information_store_server ($error_num)\n",1);
       $Win32::OLE::Warn=$original_ole_warn_value;
-      bless $ldap_provider,"Win32::Exchange";
       return 0;
     }
   }
-  _DebugComment("    Box Does Not Exist (This is good)\n");
+  _DebugComment("    Box Does Not Exist (This is good)\n",3);
   bless $ldap_provider,"Win32::Exchange";
 
   my $new_mailbox = $Recipients->Create("organizationalPerson", "cn=$mailbox_alias_name");
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("error creating Mailbox -> $error_num ($error_name)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error creating Mailbox -> $error_num ($error_name)\n",1);
     $Win32::OLE::Warn=$original_ole_warn_value;
-    bless $new_mailbox,"Win32::Exchange";
     return 0;
   }
   my %attrs;
@@ -690,17 +702,16 @@ sub _E55CreateMailbox {
     $new_mailbox->Put($attr => $attrs{$attr}); 
   }
   $new_mailbox->SetInfo;
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("error setting attribute on mailbox -> $error_num ($error_name)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error setting attribute on mailbox -> $error_num ($error_name)\n",1);
     $Win32::OLE::Warn=$original_ole_warn_value;
-    bless $new_mailbox,"Win32::Exchange";
     return 0;
   }
   
-  _DebugComment("      -Mailbox created...\n");
+  _DebugComment("      -Mailbox created...\n",3);
 
   $Win32::OLE::Warn=$original_ole_warn_value;
-  return bless $new_mailbox,"Win32::Exchange";
+  return $new_mailbox;
 }
 
 sub _E2KCreateMailbox {
@@ -738,26 +749,25 @@ sub _E2KCreateMailbox {
   _StripBackslashes($nt_pdc,$pdc); 
   my $user_dist_name;
   if (!AdodbSearch($pdc,"(samAccountName=$mailbox_alias_name)","samAccountName,distinguishedName",$user_dist_name)) {
-    _DebugComment("Error querying distinguished name for user in CreateMailbox (E2K)\n");
+    _DebugComment("Error querying distinguished name for user in CreateMailbox (E2K)\n",1);
     return 0;
   }
  
-  #_DebugComment("user_dist_name = $user_dist_name\n");  
+  _DebugComment("user_dist_name = $user_dist_name\n",3);  
  
   bless $provider,"Win32::OLE";
   my $user_account = $provider->DataSource->Open("LDAP://$pdc/$user_dist_name");
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("Failed opening NT user account for new mailbox creation on $pdc ($error_num)\n");
-    bless $provider,"Win32::Exchange";
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Failed opening NT user account for new mailbox creation on $pdc ($error_num)\n",1);
     return 0;
   }
   my $info_store = $provider->GetInterface( "IMailboxStore");
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("Failed opening mailbox interface on $pdc ($error_num)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Failed opening mailbox interface on $pdc ($error_num)\n",1);
     if ($error_num eq "0x80004002") {
-      _DebugComment("Error:  No such interface supported.\n  Note:  Make sure you have the Exchange System Manager loaded on this system\n");
+
+      _DebugComment("Error:  No such interface supported.\n  Note:  Make sure you have the Exchange System Manager loaded on this system\n",2);
     }
-    bless $provider,"Win32::Exchange";
     return 0;
   }
   if ($mailbox_ldap_path eq "") {
@@ -765,11 +775,10 @@ sub _E2KCreateMailbox {
       return 0;
     }
   }
-  _DebugComment("$mailbox_ldap_path\n");
+  _DebugComment("$mailbox_ldap_path\n",3);
   $info_store->CreateMailbox($mailbox_ldap_path);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("Failed creating mailbox for $mailbox_alias_name ($error_num) $error_name\n");
-    bless $provider,"Win32::Exchange";
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Failed creating mailbox for $mailbox_alias_name ($error_num) $error_name\n",1);
     return 0;
   }
  
@@ -780,12 +789,10 @@ sub _E2KCreateMailbox {
   #i.e. $provider->DataSource->Save(); #may eventually yield an error
   
   $provider->DataSource->Save();
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("Failed saving mailbox for $mailbox_alias_name\n");
-    bless $provider,"Win32::Exchange";
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Failed saving mailbox for $mailbox_alias_name\n",1);
     return 0;
   }
-  bless $provider,"Win32::Exchange";
   return $provider;
 }
 
@@ -803,16 +810,18 @@ sub GetDistinguishedName {
   my %filters;
   
   %filters = ('Home-MDB' => "(objectClass=MHS-Message-Store)",
-            'Home-MTA' => "(objectClass=MTA)",
+              'Home-MTA' => "(objectClass=MTA)",
            );
-  if (defined($filters{$filter})) {
+  if ($filters{$filter} ne "") {
     $filter_name=$filters{$filter};
   } else {
     $filter_name = $filter;#If someone wants to actually send a correctly formatted objectClass  
   }
-  if (_AdodbExtendedSearch($server_name,"LDAP://$server_name",$filter_name,"cn,distinguishedName",1,$result)) {
+  _DebugComment("filter=$filter_name\n",2);
+  _DebugComment("search=$server_name\n",2);
+  if (_AdodbExtendedSearch($server_name,"LDAP://$server_name",$filter_name,"cn,distinguishedName",2,$result)) {
     $_[2] = $result;
-    return 0;
+    return 1;
   } else {
     return 0;
   }
@@ -822,9 +831,11 @@ sub _StripBackslashes {
   my $nt_pdc = $_[0];
   if ($nt_pdc =~ /^\\\\(.*)/) {
     $_[1] = $1;
+    _DebugComment("backslashes removed... $nt_pdc is now $_[1]\n",3);
     return 1;
   } else {
     $_[1] = $nt_pdc;
+    _DebugComment("Nothing to do... $nt_pdc\n",3);
     return 1;
   }
 }
@@ -838,8 +849,8 @@ sub GetMailbox {
   bless $provider,"Win32::OLE";
   Win32::OLE->LastError(0);
   my $type = Win32::OLE->QueryObjectType($provider);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("failed querying OLE Object for Exchange Server Determination for CreateMailbox\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("failed querying OLE Object for Exchange Server Determination for CreateMailbox\n",1);
     bless $provider,"Win32::Exchange";
     return 0;
   }
@@ -847,14 +858,19 @@ sub GetMailbox {
   if ($type eq "IPerson") {
     #IPerson returns for CDO.Person (E2K)
     if ($mbx = _E2KGetMailbox(@_)) {
+      bless $mbx,"Win32::Exchange";
+      bless $provider,"Win32::Exchange";
       return $mbx;
     }
   } else {
     #nothing returns for ADsNamespaces (E5.5)
     if ($mbx = _E55GetMailbox(@_)) {
+      bless $provider,"Win32::Exchange";
+      bless $mbx,"Win32::Exchange";
       return $mbx;
     }
   }
+  bless $provider,"Win32::Exchange";
   return 0;
 }
 
@@ -872,9 +888,9 @@ sub _E55GetMailbox {
     $mailbox_alias_name = $_[2];
     if (scalar(@_) == 3) {
       if ($ldap_provider->GetLDAPPath($information_store_server,$org,$ou)) {
-        _DebugComment("returned -> o=$org,ou=$ou\n");
+        _DebugComment("returned -> o=$org,ou=$ou\n",3);
       } else {
-        _DebugComment("Error Returning from GetLDAPPath\n");
+        _DebugComment("Error Returning from GetLDAPPath\n",1);
         return 0;
       }
     } elsif (scalar(@_) == 5) {
@@ -891,9 +907,8 @@ sub _E55GetMailbox {
   my $recipients_path = "LDAP://$information_store_server/cn=Recipients,ou=$ou,o=$org";
   bless $ldap_provider,"Win32::OLE";
   my $Recipients = $ldap_provider->GetObject("",$recipients_path);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("Failed opening recipients path on $information_store_server\n");
-    bless $ldap_provider,"Win32::Exchange";
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Failed opening recipients path on $information_store_server\n",1);
     return 0;
   }
 
@@ -901,14 +916,13 @@ sub _E55GetMailbox {
   $Win32::OLE::Warn = 0; #Turn STDERR warnings off because we probably are going to get an error (0x80072030)
 
   my $mailbox = $Recipients->GetObject("organizationalPerson", "cn=$mailbox_alias_name");
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("Unable to Get the mailbox object for $mailbox_alias_name on $information_store_server ($error_num)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Unable to Get the mailbox object for $mailbox_alias_name on $information_store_server ($error_num)\n",1);
     $Win32::OLE::Warn=$original_ole_warn_value;
-    bless $ldap_provider,"Win32::Exchange";
     return 0;
   }
   $Win32::OLE::Warn=$original_ole_warn_value;
-  return bless $mailbox,"Win32::Exchange";
+  return $mailbox;
 }
 
 sub _E2KGetMailbox {
@@ -930,31 +944,28 @@ sub _E2KGetMailbox {
   
   my $user_dist_name;
   if (!AdodbSearch($dc,"(samAccountName=$mailbox_alias_name)","samAccountName,distinguishedName",$user_dist_name)) {
-    _DebugComment("Error querying distinguished name for user in GetMailbox (E2K)\n");
+    _DebugComment("Error querying distinguished name for user in GetMailbox (E2K)\n",1);
     return 0;
   }
 
   bless $provider,"Win32::OLE";
   $provider->DataSource->Open("LDAP://$dc/$user_dist_name");
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("Failed opening AD user account for mailbox retrieval on $dc ($error_num)\n");
-    bless $provider,"Win32::Exchange";
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Failed opening AD user account for mailbox retrieval on $dc ($error_num)\n",1);
     return 0;
   }
   my $user_obj_path = $provider->DataSource->{SourceURL};
   my $user_obj = Win32::OLE->GetObject($user_obj_path);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("Failed opening SourceURL for GetMailbox ($error_num)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Failed opening SourceURL for GetMailbox ($error_num)\n",1);
     return 0;
   }
   if ($user_obj->{homeMDB} eq "") {
     #Win32::OLE->LastError("0x80072030"); #I hope this works
-    _DebugComment("Error performing GetMailbox..  mailbox does not exist ($error_num)\n");
-    bless $provider,"Win32::Exchange";
+    _DebugComment("Error performing GetMailbox..  mailbox does not exist\n",2);
     return 0;
   } else {
     $provider->DataSource->Save();
-    bless $provider,"Win32::Exchange";
     return $provider;
   }
 }
@@ -962,29 +973,66 @@ sub _E2KGetMailbox {
 sub SetAttributes {
   my $error_num;
   my $error_name;
-  my $mailbox = $_[0];
+  my $provider = $_[0];
 
-  bless $mailbox,"Win32::OLE";
+  bless $provider,"Win32::OLE";
   Win32::OLE->LastError(0);
-  my $type = Win32::OLE->QueryObjectType($mailbox);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("failed querying OLE Object type for Exchange Server Determination during call to SetAttributes\n");
-    bless $mailbox,"Win32::Exchange";
+  my $type = Win32::OLE->QueryObjectType($provider);
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("failed querying OLE Object type for Exchange Server Determination during call to SetAttributes\n",1);
+    bless $provider,"Win32::Exchange";
     return 0;
   }
-  bless $mailbox,"Win32::Exchange";
+  bless $provider,"Win32::Exchange";
+  my $rtn;
   if ($type eq "IPerson") {
     #IPerson returns should CDO.Person (E2K)
-    if ($mailbox = _E2KSetAttributes(@_)) {
-      return $mailbox;
+    if ($rtn = _E2KSetAttributes(@_)) {
+      bless $provider,"Win32::Exchange";
+      return $rtn;
     }
   } else {
     #nothing returns for ADsNamespaces (E5.5)
-    if ($mailbox = _E55SetAttributes(@_)) {
-      return $mailbox;
+    if ($rtn = _E55SetAttributes(@_)) {
+      bless $provider,"Win32::Exchange";
+      return $rtn;
     }
   }
+  bless $provider,"Win32::Exchange";
   return 0;
+}
+
+sub _E55SetAttributes {
+  my $error_num;
+  my $error_name;
+  my $mailbox;
+  my %attrs;
+  if (scalar(@_) == 2) {
+    $mailbox = $_[0];
+    if (ref($_[1]) ne "HASH") {
+      _DebugComment("second object passed to SetAttributes was not a HASH reference -> $error_num ($error_name)\n",1);
+      return 0;
+    } else {
+      %attrs = %{$_[1]};
+    }
+  } else {
+    _ReportArgError("SetAttributes [E55]",scalar(@_));
+    return 0;
+  }
+  my $original_ole_warn_value=$Win32::OLE::Warn;
+  $Win32::OLE::Warn=0;
+  bless $mailbox,"Win32::OLE";
+  foreach my $attr (keys %attrs) {
+    $mailbox->Put($attr => $attrs{$attr}); 
+  }
+  $mailbox->SetInfo;
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error setting attribute on mailbox -> $error_num ($error_name)\n",1);
+    $Win32::OLE::Warn=$original_ole_warn_value;
+    return 0;
+  }
+  $Win32::OLE::Warn=$original_ole_warn_value;
+  return 1;
 }
 
 sub _E2KSetAttributes {
@@ -996,7 +1044,7 @@ sub _E2KSetAttributes {
   if (scalar(@_) == 2) {
     $user_account = $_[0];
     if (ref($_[1]) ne "HASH") {
-      _DebugComment("second object passed to SetAttributes was not a HASH reference -> $error_num ($error_name)\n");
+      _DebugComment("second object passed to SetAttributes was not a HASH reference -> $error_num ($error_name)\n",1);
       return 0;
     } else {
       %attrs = %{$_[1]};
@@ -1008,9 +1056,8 @@ sub _E2KSetAttributes {
   bless $user_account,"Win32::OLE";
   foreach my $interface (keys %attrs) {
     my $mailbox_interface = $user_account->GetInterface($interface);
-    if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-      _DebugComment("error getting mailbox interface -> $error_num ($error_name)\n");
-      bless $user_account,"Win32::Exchange";
+    if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("error getting mailbox interface -> $error_num ($error_name)\n",1);
       return 0;
     }
     foreach my $attr (keys %{$attrs{$interface}}) {
@@ -1018,12 +1065,10 @@ sub _E2KSetAttributes {
     }
     $user_account->DataSource->Save();
   }
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("error setting attribute on mailbox -> $error_num ($error_name)\n");
-    bless $mailbox,"Win32::Exchange";
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error setting attribute on mailbox -> $error_num ($error_name)\n",1);
     return 0;
   }
-  bless $user_account,"Win32::Exchange";
   return 1;
 
   #  overriding defaults
@@ -1052,24 +1097,24 @@ sub SetOwner {
     $dc=$1;
     $username = $2;
   } else {
-    _DebugComment("error parsing username to extract domain and username\n");
+    _DebugComment("error parsing username to extract domain and username\n",1);
     return 0;
   }
 
   my $sid = Win32::OLE->new("ADsSID");
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("error creating security object (ADsSID) -> $error_num ($error_name)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error creating security object (ADsSID) -> $error_num ($error_name)\n",1);
     return 0;
   }
   $sid->SetAs($ADS_SID_WINNT_PATH, "WinNT://$dc/$username,user");
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("error setting security object at an ADS_SID_WINNT_PATH -> $error_num ($error_name)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error setting security object at an ADS_SID_WINNT_PATH -> $error_num ($error_name)\n",1);
     return 0;
   }
 
   my $sidHex = $sid->GetAs($ADS_SID_HEXSTRING);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("error converting security object at an ADS_SID_HEXSTRING -> $error_num ($error_name)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error converting security object at an ADS_SID_HEXSTRING -> $error_num ($error_name)\n",1);
     return 0;
   }
 
@@ -1077,8 +1122,8 @@ sub SetOwner {
   $new_mailbox->Put("Assoc-NT-Account", $sidHex );
   $new_mailbox->SetInfo;
 
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("error setting owner information on mailbox -> $error_num ($error_name)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error setting owner information on mailbox -> $error_num ($error_name)\n",1);
     bless $new_mailbox,"Win32::Exchange";
     return 0;      
   }
@@ -1089,30 +1134,33 @@ sub SetOwner {
 sub SetPerms {
   my $error_num;
   my $error_name;
-  my $mailbox = $_[0];
+  my $provider = $_[0];
 
-  bless $mailbox,"Win32::OLE";
+  bless $provider,"Win32::OLE";
   Win32::OLE->LastError(0);
-  my $type = Win32::OLE->QueryObjectType($mailbox);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("failed querying OLE Object type for Exchange Server Determination during call to SetAttributes\n");
-    bless $mailbox,"Win32::Exchange";
+  my $type = Win32::OLE->QueryObjectType($provider);
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("failed querying OLE Object type for Exchange Server Determination during call to SetAttributes\n",1);
+    bless $provider,"Win32::Exchange";
     return 0;
   }
-  bless $mailbox,"Win32::Exchange";
+  bless $provider,"Win32::Exchange";
   
   my $rtn;
   if ($type eq "IPerson") {
     #IPerson returns should CDO.Person (E2K)
     if ($rtn = _E2KSetPerms(@_)) {
+      bless $provider,"Win32::Exchange";
       return $rtn;
     }
   } else {
     #nothing returns for ADsNamespaces (E5.5)
-    if ($mailbox = _E55SetPerms(@_)) {
+    if ($rtn = _E55SetPerms(@_)) {
+      bless $provider,"Win32::Exchange";
       return $rtn;
     }
   }
+  bless $provider,"Win32::Exchange";
   return 0;
 }
 
@@ -1122,7 +1170,7 @@ sub _E55SetPerms {
     return 0;
   }
   if (ref($_[1]) ne "ARRAY") {
-    _DebugComment("permissions list must be an array reference (e55)\n");
+    _DebugComment("permissions list must be an array reference (e55)\n",1);
     return 0;
   }
   my $new_mailbox = $_[0];
@@ -1131,10 +1179,10 @@ sub _E55SetPerms {
   my $sec = Win32::OLE->CreateObject("ADsSecurity");
   my $error_num;
   my $error_name;
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("error creating security object (ADSSecurity) -> $error_num ($error_name)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error creating security object (ADSSecurity) -> $error_num ($error_name)\n",1);
     if ($error_num eq "0x80004002") {
-      _DebugComment("Error:  No such interface supported.\n  Note:  Make sure you have the ADSSecurity.DLL from the ADSI SDK regisered on this system\n");
+      _DebugComment("Error:  No such interface supported.\n  Note:  Make sure you have the ADSSecurity.DLL from the ADSI SDK regisered on this system\n",2);
     }
     return 0;
   }
@@ -1143,24 +1191,21 @@ sub _E55SetPerms {
   
   my $sd = $sec->GetSecurityDescriptor($new_mailbox->{ADsPath});
   
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("error querying security descriptor for mailbox -> $error_num ($error_name)\n");
-    bless $new_mailbox,"Win32::Exchange";
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error querying security descriptor for mailbox -> $error_num ($error_name)\n",1);
     return 0;
   }
   my $dacl = $sd->{DiscretionaryAcl};
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("error querying discretionary acl for mailbox -> $error_num ($error_name)\n");
-    bless $new_mailbox,"Win32::Exchange";
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error querying discretionary acl for mailbox -> $error_num ($error_name)\n",1);
     return 0;
   }
 
   foreach my $userid (@perms_list) {
-    _DebugComment("      -Setting perms for $userid\n");
+    _DebugComment("      -Setting perms for $userid\n",3);
     my $ace = Win32::OLE->CreateObject("AccessControlEntry");
-    if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-      _DebugComment("error creating access control entry for mailbox -> $error_num ($error_name)\n");
-      bless $new_mailbox,"Win32::Exchange";
+    if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("error creating access control entry for mailbox -> $error_num ($error_name)\n",1);
       return 0;
     }
 
@@ -1171,40 +1216,34 @@ sub _E55SetPerms {
 
     foreach my $property (keys %properties) {
       $ace->LetProperty($property,$properties{$property}); 
-      if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-        _DebugComment("error setting $property for mailbox -> $error_num ($error_name)\n");
-        bless $new_mailbox,"Win32::Exchange";
+      if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+        _DebugComment("error setting $property for mailbox -> $error_num ($error_name)\n",1);
         return 0;
       }
     }
 
 
     $dacl->AddAce($ace);
-    if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-      _DebugComment("error adding access control entry to perms list -> $error_num ($error_name)\n");
-      bless $new_mailbox,"Win32::Exchange";
+    if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("error adding access control entry to perms list -> $error_num ($error_name)\n",1);
       return 0;
     }
   }
   $sd->LetProperty("DiscretionaryAcl",$dacl); 
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("error setting  discretionary acl on security security descriptor -> $error_num ($error_name)\n");
-    bless $new_mailbox,"Win32::Exchange";
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error setting  discretionary acl on security security descriptor -> $error_num ($error_name)\n",1);
     return 0;
   }
   $sec->SetSecurityDescriptor($sd);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("error setting security descriptor on security object -> $error_num ($error_name)\n");
-    bless $new_mailbox,"Win32::Exchange";
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error setting security descriptor on security object -> $error_num ($error_name)\n",1);
     return 0;
   }
   $new_mailbox->SetInfo;
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("error setting permissions on mailbox -> $error_num ($error_name)\n");
-    bless $new_mailbox,"Win32::Exchange";
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error setting permissions on mailbox -> $error_num ($error_name)\n",1);
     return 0;
   }
-  bless $new_mailbox,"Win32::Exchange";
   return 1;
 }
 
@@ -1216,7 +1255,7 @@ sub _E2KSetPerms {
     return 0;
   }
   if (ref($_[1]) ne "ARRAY") {
-    _DebugComment("permissions list must be an array reference (e2k)\n");
+    _DebugComment("permissions list must be an array reference (e2k)\n",1);
     return 0;
   }
 
@@ -1227,38 +1266,40 @@ sub _E2KSetPerms {
 
   my $ldap_user_path = $cdo_user_obj->{DataSource}->{SourceURL};
   my $ldap_user_obj = Win32::OLE->GetObject($ldap_user_path);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("Error querying Source URL for CDO.Person object ($error_num)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error querying Source URL for CDO.Person object ($error_num)\n",1);
     return 0;
   }
 
   #http://support.microsoft.com/default.aspx?scid=KB;EN-US;Q310866
   my $sd = $ldap_user_obj->{'MailboxRights'};
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("Error querying MailboxRights property ($error_num) - make sure you are using Exchange 2000 SP1+hotfix or higher [server & client]\n");
-    #http://support.microsoft.com/default.aspx?scid=KB;EN-US;Q302926
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error querying MailboxRights property ($error_num)\n",1);
+    _DebugComment("- make sure you are using Exchange 2000 SP1+hotfix or higher [server & client]\n",2);
+    _DebugComment('  http://support.microsoft.com/default.aspx?scid=KB;EN-US;Q302926'."\n",3);
     return 0;
   }
 
   my $dacl = $sd->{DiscretionaryAcl};
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("Error getting DiscretionaryAcl ($error_num)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error getting DiscretionaryAcl ($error_num)\n",1);
     return 0;
   }
 
   foreach my $user_account (@perms_list) {
     my $domain;
     my $username;
+
     if ($user_account =~ /(.*)\\(.*)/) {
       $domain = $1;
       $username = $2;
     } else {
-      _DebugComment("error parsing user object (expected DOMAIN\\Username) -> $error_num ($error_name)\n");
+      _DebugComment("error parsing user object (expected DOMAIN\\Username) -> $error_num ($error_name)\n",1);
       return 0;
     }
     my $Ace = Win32::OLE->new("AccessControlEntry");
-    if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-      _DebugComment("Error creating new ACE ($error_num)\n");
+    if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("Error creating new ACE ($error_num)\n",1);
       return 0;
     }
     my %properties;
@@ -1275,36 +1316,68 @@ sub _E2KSetPerms {
       }
   
       $Ace->LetProperty($property,$properties{$property});
-      if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-        _DebugComment("Error setting $property ($error_num)\n");
+      if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+        _DebugComment("Error setting $property ($error_num)\n",1);
         return 0;
       }
     }
     $dacl->AddAce($Ace);
-    if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-      _DebugComment("Error adding AccessControlEntry to AccessControlList: ($error_num)\n");
+    if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("Error adding AccessControlEntry to AccessControlList: ($error_num)\n",1);
       return 0;
     }
   }
   $sd->LetProperty('DiscretionaryAcl',$dacl);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("Error setting AccessControlList to Security Descriptor: ($error_num)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error setting AccessControlList to Security Descriptor: ($error_num)\n",1);
     return 0;
   }
   $ldap_user_obj->LetProperty('MailboxRights',$sd);
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("Error setting Security Descriptor to Mailbox Security entry: ($error_num)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error modfying Mailbox Security entry: ($error_num)\n",1);
     return 0;
   }
   $ldap_user_obj->SetInfo();
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("Error setting Security Descriptor to Mailbox Security entry: ($error_num)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error setting information to Mailbox Security entry: ($error_num)\n",1);
     return 0;
   }
   return 1;
 }
 
 sub AddDLMembers {
+  my $error_num;
+  my $error_name;
+  my $provider = $_[0];
+  bless $provider,"Win32::OLE";
+  Win32::OLE->LastError(0);
+  my $type = Win32::OLE->QueryObjectType($provider);
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("failed querying OLE Object type for Exchange Server Determination during call to SetAttributes\n",1);
+    bless $provider,"Win32::Exchange";
+    return 0;
+  }
+  bless $provider,"Win32::Exchange";
+  
+  my $rtn;
+  if ($type eq "IPerson") {
+    #IPerson returns should CDO.Person (E2K)
+    if ($rtn = _E2KAddDLMembers(@_)) {
+      bless $provider,"Win32::Exchange";
+      return $rtn;
+    }
+  } else {
+    #nothing returns for ADsNamespaces (E5.5)
+    if ($rtn = _E55AddDLMembers(@_)) {
+      bless $provider,"Win32::Exchange";
+      return $rtn;
+    }
+  }
+  bless $provider,"Win32::Exchange";
+  return 0;
+}
+
+sub _E55AddDLMembers {
   my $ldap_provider;
   my $server_name;
   my $exch_dl_name;
@@ -1316,15 +1389,15 @@ sub AddDLMembers {
     $server_name=$_[1];
     $exch_dl_name=$_[2];
     if (ref($_[3]) ne "ARRAY") {
-      _DebugComment("members list must be an array reference\n");
+      _DebugComment("members list must be an array reference\n",1);
       return 0;
     }
     @new_members=@{$_[3]};
     if (scalar(@_) == 4) {
       if ($ldap_provider->GetLDAPPath($server_name,$org,$ou)) {
-        _DebugComment("returned -> o=$org,ou=$ou\n");
+        _DebugComment("returned -> o=$org,ou=$ou\n",3);
       } else {
-        _DebugComment("Error Returning from GetLDAPPath\n");
+        _DebugComment("Error Returning from GetLDAPPath\n",1);
         return 0;
       }
     } elsif (scalar(@_) == 6) {
@@ -1344,31 +1417,30 @@ sub AddDLMembers {
 
   bless $ldap_provider,"Win32::OLE";
   my $exch_dl = $ldap_provider->GetObject("","LDAP://$server_name/cn=$exch_dl_name,cn=Distribution Lists,ou=$ou,o=$org");
-  bless $ldap_provider,"Win32::Exchange";
   my $error_num;
   my $error_name;
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("error querying distribution list ($exch_dl_name) -> $error_num ($error_name)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error querying distribution list ($exch_dl_name) -> $error_num ($error_name)\n",1);
     return 0;
   }
   
   my $exch_members = $exch_dl->{'member'}; #get the list
   if (ref($exch_members) eq "ARRAY") {
-    _DebugComment("      -Array (2 or more members exist)\n");
+    _DebugComment("      -Array (2 or more members exist)\n",3);
   } else {
-    _DebugComment("      -(Less than 2 members are named in this distribution list)\n");
+    _DebugComment("      -(Less than 2 members are named in this distribution list)\n",3);
     my $temp_exch_dl=$exch_members;
     undef ($exch_members);
     if ($temp_exch_dl) {
-      _DebugComment("      -1 member exists\n");
+      _DebugComment("      -1 member exists\n",3);
       #So push the existing name to the Array
       push (@$exch_members, $temp_exch_dl);
     } else {
-      _DebugComment("      -0 members exists\n");
+      _DebugComment("      -0 members exists\n",3);
     }
   }
   foreach my $username (@new_members) {
-    _DebugComment("      -Adding $username to Distribution List: $exch_dl_name\n");
+    _DebugComment("      -Adding $username to Distribution List: $exch_dl_name\n",3);
     my $duplicate;
     foreach my $dup (@$exch_members) {
       if (lc($dup) =~ lc("cn=$username,cn=Recipients,ou=$ou,o=$org")) {
@@ -1382,24 +1454,93 @@ sub AddDLMembers {
   }
   $exch_dl->Put('member', $exch_members);
   $exch_dl->SetInfo;
-  if (!_ErrorCheck(Win32::OLE->LastError(),"0x00000000",$error_num,$error_name)) {
-    _DebugComment("error setting new member for distribution list ($exch_dl_name) -> $error_num ($error_name)\n");
+  if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("error setting new member for distribution list ($exch_dl_name) -> $error_num ($error_name)\n",1);
     return 0;
   }
   return 1;
 }
 
-sub _ErrorCheck {
-  my $last_ole_error = $_[0];
-  my $last_error_expected = $_[1];
+sub _E2KAddDLMembers {
+  if (scalar(@_) != 3) {
+    _ReportArgError("AddDLMembers (E2K)",scalar(@_));
+    return 0;
+  }
+  if (ref($_[2]) ne "ARRAY") {
+    _DebugComment("Third argument is the list of users you want to add to this DL, and should be an array reference, but instead, it was a(an): ".ref($_[2])." reference\n",1);
+    return 0;
+  }
   my $error_num;
   my $error_name;
+  my $group_dn;
+  my $user_dn;
+  my $provider = $_[0];
+  my $group = $_[1];
+  my @user_list = @{$_[2]};
+
+  if (!Win32::Exchange::_AdodbExtendedSearch($group,"LDAP://RootDSE/dnsHostName","(objectClass=group)","samAccountName,distinguishedName",$group_dn)) {
+    _DebugComment("Failed Adodb search for dist list\n",1);
+    return 0;
+  }
+
+  foreach my $username (@user_list) {
+    #print "    -Adding $username to $group\n";
+    if (!Win32::Exchange::_AdodbExtendedSearch($username,"LDAP://RootDSE/dnsHostName","(objectClass=user)","samAccountName,distinguishedName",$user_dn)) {
+      _DebugComment("Failed Adodb search for user\n",1);
+      return 0;
+    }
+    my $RootDSE = Win32::OLE->GetObject("LDAP://RootDSE");
+    if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("Failed Getting RootDSE ($error_num)\n",1);
+      return 0;
+    }
+    my $dc = $RootDSE->Get("dnsHostName");
+    if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("Error getting RootDSE dns host name ($error_num)\n",1);
+      return 0;
+    }
+    my @dc_array = split(/\./,$dc);
+    my $ldap_obj = Win32::OLE->new("ADsNamespaces");
+    if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("Error creating new ADsNamespaces object ($error_num)\n",1);
+      return 0;
+    }
+    my $group_obj = $ldap_obj->GetObject("","LDAP://$dc_array[0]/$group_dn");
+    if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("Error opening distribution list on $dc_array[0] ($error_num)\n",1);
+      return 0;
+    }
+  
+    $group_obj->Add("LDAP://$dc_array[0]/$user_dn");
+    if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      if ($error_num eq "0x80071392") {
+        _DebugComment("Error adding user ($username) to distribution list [they are already a member]\n",1);
+      } else {
+        _DebugComment("Error adding user ($username) to distribution list ($error_num)\n",1);
+        return 0;
+      }
+    }
+ 
+    $group_obj->SetInfo;
+    if (!_ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("Error committing addition to distribution list ($error_num)\n",1);
+      return 0;
+    }
+  }
+  return 1;
+}
+
+sub _ErrorCheck {
+  my $last_error_expected = $_[0];
+  my $error_num;
+  my $error_name;
+  my $last_ole_error = Win32::OLE->LastError();
   $error_num = sprintf ("0x%08x",$last_ole_error);
   my @error_list = split(/\"/,$last_ole_error,3);
   $error_name = $error_list[1];
   if ($error_num ne $last_error_expected) {
-    $_[2] = $error_num;
-    $_[3] = $error_name;
+    $_[1] = $error_num;
+    $_[2] = $error_name;
     return 0;
   } else {
     return 1;
@@ -1407,12 +1548,15 @@ sub _ErrorCheck {
 }
 
 sub _ReportArgError {
-  _DebugComment("incorrect number of options passed to $_[0] ($_[1])\n");
+  _DebugComment("incorrect number of options passed to $_[0] ($_[1])\n",0);
   return 1;
 }
 
 sub _DebugComment {
-  print "$_[0]" if ($DEBUG == 1);
+  if (scalar(@_) != 2) {
+    print "DebugComment Error!!!!\n";
+  }
+  print "$_[0]" if ($DEBUG > ($_[1] - 1));
   return 1;
 }
 1;

@@ -37,6 +37,7 @@
           <LI>Exchange 2000</LI>
           <UL>
             <LI><A HREF="#function_new">new</A></LI>
+            <LI><A HREF="#function_AddDLMembers">AddDLMembers</A></LI>
             <LI><A HREF="#function_CreateMailbox">CreateMailbox</A></LI>
             <LI><A HREF="#function_GetDistinguishedName">GetDistinguishedName</A></LI>
             <LI><A HREF="#function_GetVersion">GetVersion</A></LI>
@@ -124,14 +125,20 @@ It returns a reference to this object or <B>undef</B> if the creation fails.<BR>
 <A HREF="#function_GetVersion"><B>GetVersion</B></A> can return an acceptable version number for your Exchange server.
 <P></P>
 <DT><STRONG><A NAME="function_AddDLMembers">$provider-&gt;<CODE>AddDLMembers($info_store_server,$dl_name,\@new_dl_members);#Exchange 5.5</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function_AddDLMembers">$provider-&gt;<CODE>AddDLMembers($dl_name,\@new_dl_members);#Exchange 2000</CODE></A></STRONG><BR>
 <DD>
-The <A HREF="#function_AddDLMembers"><CODE>AddDLMembers()</CODE></A> function is only implemented for Exchange 5.5.  I'll look at modifying Distribution lists
-in Exchange 2000, but I think it's just an AD group with special properties.  In any case, it's not implemented for Exchange 2000.  Sorry.<BR>
+The only noticable difference between Exchange 5.5 and 2000 for this call are the parameters sent to it, and the provider version that
+should be sent.  In either case, both functions check parameters and provider versions, so you shouldn't hit any snafus.<BR>
 <BR>
+  #Exchange 5.5<BR>
   if ($provider->AddDLMembers($info_store_server,$dl_name,/@new_dl_members)) {<BR>
     print "Added members successfully\n";<BR>
   }<BR>
-  #Exchange 5.5 only<BR>
+<BR>
+  #Exchange 2000<BR>
+  if ($provider->AddDLMembers($dl_name,/@new_dl_members)) {<BR>
+    print "Added members successfully\n";<BR>
+  }<BR>
 <BR>
 <BR>
 <DT><STRONG><A NAME="function_CreateMailbox"></A></STRONG><BR>
@@ -501,20 +508,18 @@ I knew that the entire string had to be all parsed together somewhere in the Dir
 <BR>
 It was; LocateMailboxStore is an implementation of that idea.<BR>
 <BR>
-As it turns out, there are a lot of tricks like LocateMailboxStore that have helped develop this module from a string concatenation mess into a lot of fancy searches for the complete ldap paths and distinguished names that power mailbox creation.<BR>
+As it turns out, there are a lot of tricks like LocateMailboxStore that have helped develop this module from
+a string concatenation mess into a lot of fancy searches for the complete ldap paths and distinguished names
+that power mailbox creation.<BR>
 <BR>
-Most of the fancy searches were created by poking around in the objects themselves with ADSVW.EXE (an ADSI SDK tool), and then writing an ADODB search to return the right result set.<BR>
-  (When using ADSVW, check:<BR>
-            "UseOpenObject",<BR>
-            "use Extended Syntax",<BR>
-            "Secure Authentication"<BR>
-   and make sure NOT to check "Use Encryp"!  It'll make your life a lot easier.)<BR>
+Most of the fancy searches were created by poking around in the objects themselves with ADSVW.EXE (an ADSI
+SDK tool), and then writing an ADODB search to return the right result set.<BR>
 <BR>
 Thanks for taking the time to read all of this..<BR>
 <BR>
-I'd like to thank the following 'people':<BR>
+I'd like to extend thanks to the following:<BR>
 <UL>
-  <LI>Andrew Bastien (activestate list member circa 1999) for his part in this and for helping me years ago regarding Exchange 5.5 mailbox creation and perl.</LI>
+  <LI>Andrew Bastien (activestate list member circa 1999) for his part in this project, even though he didn't know this would eventually become a project, and for his help years ago regarding Exchange 5.5 mailbox creation using perl.</LI>
   <LI>Dave Roth, in part for advice and comments on my code, and then also for offering to host the PPM for this module!</LI>
   <LI><P>Jan Dubois &lt;<A HREF="mailto:jand@activestate.com">jand@activestate.com</A>&gt; and Everyone at Activestate for Win32::OLE, without which this module wouldn't be possible.</LI>
   <LI>Activestate, for having the mailing list archive chock-full-o' source code and answers to questions asked and answered way too many times!</LI>
@@ -524,9 +529,9 @@ I'd like to thank the following 'people':<BR>
 <P>Please send questions, comments or suggestions about this module to Steven Manross &lt;<A HREF="mailto:steven@manross.net">steven@manross.net</A>&gt.</P>
 <HR>
 <H1><A NAME="version">VERSION</A></H1>
-<P>Version 0.0.0.024     August 26, 2002</P>
+<P>Version 0.0.0.027     August 29, 2002</P>
 <H1><A NAME="copyright">Copyright</A></H1>
-Microsoft, Active Directory, ADSI, Windows, Windows NT, MSDN, Exchange are either registered trademarks or trademarks of Microsoft Corporation in the United States and/or other countries.<BR>
+Microsoft, Active Directory, ADSI, Windows, Windows NT, MSDN, and Exchange are either registered trademarks or trademarks of Microsoft Corporation in the United States and/or other countries.<BR>
 <BR>
 <BR>
 <TABLE BORDER=0 CELLPADDING=0 CELLSPACING=0 WIDTH=100%>

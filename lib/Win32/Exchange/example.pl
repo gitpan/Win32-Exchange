@@ -26,6 +26,10 @@ if (!($provider = Win32::Exchange->new($ver{'ver'}))) {
   die "$rtn - Error returning into main from new ($Win32::Exchange::VERSION)\n";
 }
 
+my @PermsUsers;
+push (@PermsUsers,"$domain\\$mailbox_alias_name");
+push (@PermsUsers,"$domain\\Exchange Perm Users"); #Group that needs perms to the mailbox...
+
 if ($ver{ver} eq "5.5") {
   if (!Win32::Exchange::GetLDAPPath($info_store_server,$org,$ou)) {
     print "Error returning into main from GetLDAPPath\n";
@@ -37,12 +41,29 @@ if ($ver{ver} eq "5.5") {
     if ($mailbox->SetOwner("$domain\\$mailbox_alias_name")) {
       print "SetOwner in GetMailbox worked!\n";
     }
+    if ($mailbox->SetPerms(\@PermsUsers)) {
+      print "Successfully set perms in GetMailbox\n";  
+    } else {
+      die "Error setting perms from GetMailbox\n";  
+    }
   } else {
     $mailbox = $provider->CreateMailbox($info_store_server,$mailbox_alias_name,$org,$ou);
     if (!$mailbox) {
       die "error creating mailbox\n";
     }
     print "We created a mailbox!\n";
+    if ($mailbox->SetOwner("$domain\\$mailbox_alias_name")) {
+      print "SetOwner worked\n";  
+    } else {
+      print "SetOwner failed\n";  
+    }
+
+
+    if ($mailbox->SetPerms(\@PermsUsers)) {
+      print "Successfully set perms\n";  
+    } else {
+      die "Error setting perms\n";  
+    }
   }
   
   #$Exchange_Info{'Deliv-Cont-Length'}='6000'; 
@@ -62,26 +83,20 @@ if ($ver{ver} eq "5.5") {
   #be careful with 'otherMailbox'es..  You are deleting any addresses that may exist already
   #if you set them via 'otherMailbox' and don't get them first (you are now forewarned).
   $Exchange_Info{'otherMailbox'}=$Other_MBX;
-  if (!Win32::Exchange::GetDistinguishedName($info_store_server,"Home-MTA",$Exchange_Info{"Home-MTA"})) {
+
+  if (!Win32::Exchange::GetDistinguishedName($mta_server,"Home-MTA",$Exchange_Info{"Home-MTA"})) {
     print "Failed getting distinguished name for Home-MTA on $info_store_server\n";
-    return 0;
+    exit 0;
   }
-  if (!Win32::Exchange::GetDistinguishedName($mta_server,"Home-MDB",$Exchange_Info{"Home-MDB"})) {
+  if (!Win32::Exchange::GetDistinguishedName($info_store_server,"Home-MDB",$Exchange_Info{"Home-MDB"})) {
     print "Failed getting distinguished name for Home-MDB on $info_store_server\n";
-    return 0;
+    exit 0;
   }
 
-  $mailbox->SetAttributes(\%Exchange_Info);
-  $mailbox->SetOwner("$domain\\$mailbox_alias_name");
-
-  my @PermsUsers;
-  push (@PermsUsers,"$domain\\$mailbox_alias_name");
-  push (@PermsUsers,"$domain\\Exchange Perm Users"); #Group that needs perms to the mailbox...
-
-  if ($mailbox->SetPerms(\@PermsUsers)) {
-    print "Successfully set perms\n";  
+  if ($mailbox->SetAttributes(\%Exchange_Info)) {
+    print "SetAttributes worked\n";  
   } else {
-    die "Error setting perms\n";  
+    print "SetAttributes failed\n";  
   }
 
   my @new_dl_members;
@@ -89,7 +104,6 @@ if ($ver{ver} eq "5.5") {
   $provider->AddDLMembers($info_store_server,"newdltest",\@new_dl_members); 
 
 } elsif ($ver{ver} eq "6.0") {
-
   $storage_group = ""; #you'd need to define this if you had more than 1 storage group on 1 server.
   $mailbox_store = ""; #you'd need to define this if you had more than 1 mailbox store on 1 or more storage groups.
   if (Win32::Exchange::LocateMailboxStore($info_store_server,$storage_group,$mailbox_store,$store_name,\@counts)) {
@@ -149,6 +163,13 @@ if ($ver{ver} eq "5.5") {
     die "Error setting 2K Perms\n";
   } else {
     print "Set 2K Perms correctly\n";
+  }
+  my @new_dl_members;
+  push (@new_dl_members,$mailbox_alias_name);
+  if ($provider->AddDLMembers("_homelist",\@new_dl_members)) {
+    print "Add successful to DL\n";
+  } else {
+    die "Error adding distlist member\n";
   }
   exit 1;
 }
