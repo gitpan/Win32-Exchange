@@ -28,99 +28,82 @@ Win32::OLE->Option('_Unique' => 1);
 #@ISA = qw(Win32::OLE);
 
 my $Version;
-my $VERSION = $Version = "0.041b";
+my $VERSION = $Version = "0.042";
 my $DEBUG = 1;
 
 sub new {
   my $server;
-  my $ver = "";
+  my $ver;
   if (scalar(@_) == 1) {
-    if ($_[0] eq "5.5" || $_[0] eq "6.0") {
-      $ver = $_[0];
-    } else {
-      $server = $_[0];
-    }
-  } elsif (scalar(@_) == 2) {
-    if ($_[0] eq "Win32::Exchange::Mailbox") {
-      if ($_[1] eq "5.5" || $_[1] eq "6.0") {
-        $ver = $_[1];
-      } else {
-        $server = $_[1];
-      }
-
-    } else {
-      _ReportArgError("new",scalar(@_));
-    }
+    $server = $_[0];
+  } elsif (scalar(@_) == 2 && $_[0] eq "Win32::Exchange::Mailbox") {
+    $server = $_[1];
   } else {
     _ReportArgError("new",scalar(@_));
     return 0;
   }
 
   my $class = "Win32::Exchange::Mailbox";
-  my $ldap_provider = {};
-
-  if ($ver eq "") {
-    my %version;
-    if (!Win32::Exchange::GetVersion($server,\%version)) {
-      return undef;
-    } else {
-      $ver = $version{'ver'}
-    }
+  my $provider = {};
+  my %version;
+  if (!Win32::Exchange::GetVersion($server,\%version)) {
+    _DebugComment("Please make sure you are passing new a servername now..  ver nums are no longer valid",0);
+    return undef;
   }
-  if ($ver eq "5.5") {
-    #Exchange 5.5
-    if ($ldap_provider = Win32::OLE->new('ADsNamespaces')) {
-      return bless $ldap_provider,$class;
-    } else {
-      _DebugComment("Failed creating ADsNamespaces object\n",1);
-      return undef;
-    }
-  } elsif ($ver eq "6.0") {
-    #Exchange 2000
-    if ($ldap_provider = Win32::OLE->new('CDO.Person')) {
-      return bless $ldap_provider,$class;
-    } else {
-      _DebugComment("Failed creating CDO.Person object\n",1);
+  bless $provider,$class;
+  $provider->{server} = $server;
+  $provider->{version} = $version{'ver'};
+  $provider->{ad_provider} = Win32::OLE->new('ADsNamespaces');
+  if (Win32::OLE->LastError() != 0) {
+    _DebugComment("Failed creating ADsNamespaces object\n",1);
+    return undef;
+  }
+  if ($provider->{version} eq "5.5") {
+    if (!$provider->GetLDAPPath()) {
+      _DebugComment("Failed calling GetLDAPPath for server org and ou determination\n",1);
       return undef;
     }
   } else {
-    _DebugComment("Unable to verify version information for version: $ver\n",1);
-    return undef;
+    $provider->{cdo_provider} = Win32::OLE->new('CDO.Person');
+    if (Win32::OLE->LastError() != 0) {
+      _DebugComment("Failed creating CDO.Person object\n",1);
+      return undef;
+    }
+    my %data;
+    if (!Win32::Exchange::_E2kVersionInfo($server,\%data)) {
+      return undef;
+    } else {
+      $provider->{dc} = $data{dc};
+    }
   }
+  return $provider;
 }
 
 sub DESTROY {
   my $object = shift;
   bless $object,"Win32::OLE";
+  #might want to look at putting a FreeUnusedLibraries here
   return undef;
 }
 
 sub GetLDAPPath {
-  my $ldap_provider;
-  my $server_name;
-  my $ldap_path;
-  my $return_point;
-  if (scalar(@_) == 3) {
-    $server_name = $_[0];
-    $ldap_path = "LDAP://$server_name";
-    $return_point = 1;
-  } elsif (scalar(@_) == 4) {
-    $ldap_provider = $_[0];
-    $server_name = $_[1];
-    $return_point = 2;
+  #changing it so you only send GetLDAPPath as an OO function
+  #only send the provider
+  my $provider;
+  if (scalar(@_) == 1) {
+    $provider = \%{$_[0]} ;
   } else {
     _ReportArgError("GetLDAPPath",scalar(@_));
     return 0;
   }
   my $result;
-  if (Win32::Exchange::_AdodbExtendedSearch($server_name,"LDAP://$server_name","(&(objectClass=Computer)(rdn=$server_name))","rdn,distinguishedName",$result)) {
+  if (Win32::Exchange::_AdodbExtendedSearch($provider->{server},"LDAP://$provider->{server}","(&(objectClass=Computer)(rdn=$provider->{server}))","rdn,distinguishedName",$result)) {
     _DebugComment("result = $result\n",2);
     if ($result =~ /cn=.*,cn=Servers,cn=Configuration,ou=(.*),o=(.*)/) {
-      my $returned_ou = $1;
-      my $returned_o = $2;
-      $_[$return_point]=$returned_o;
-      $_[($return_point+1)]=$returned_ou;
-      _DebugComment("ou=$returned_ou\no=$returned_o\n",2);
+      $provider->{ou}=$1;
+      $provider->{org}=$2;
+      _DebugComment("ou=$provider->{ou}\no=$provider->{org}\n",2);
+      $_[0] = $provider;
       return 1;
     } else {
       _DebugComment("result = $result\n",2);
@@ -134,61 +117,44 @@ sub GetLDAPPath {
 }
 
 sub CreateMailbox {
-  my $error_num;
-  my $error_name;
   my $mbx;
-  my $provider = $_[0];
-
-  bless $provider,"Win32::OLE";
-  
-  Win32::OLE->LastError(0);
-  my $type = Win32::OLE->QueryObjectType($provider);
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("failed querying OLE Object for Exchange Server Determination for CreateMailbox ($error_num)\n",1);
-    bless $provider,"Win32::Exchange::Mailbox";
-    return 0;
-  }
-  bless $provider,"Win32::Exchange::Mailbox";
-  if ($type eq "IPerson") {
-    #IPerson returns for CDO.Person (E2K)
+  my $provider;
+  $provider = \%{$_[0]} ;
+  if ($provider->{version} =~ /^6\./) {
     if ($mbx = _E2KCreateMailbox(@_)) {
-      bless $provider,"Win32::Exchange::Mailbox";
-      bless $mbx,"Win32::Exchange::Mailbox";
       return $mbx;
     }
   } else {
-    #nothing returns for ADsNamespaces (E5.5)
     if ($mbx = _E55CreateMailbox(@_)) {
-      bless $provider,"Win32::Exchange::Mailbox";
-      bless $mbx,"Win32::Exchange::Mailbox";
       return $mbx;
     }
   }
-  bless $provider,"Win32::Exchange::Mailbox";
   return 0;
 }
 
 sub _E55CreateMailbox {
-  my $ldap_provider;
+  #removed $_[1] -- information_store_server -- unneeded
+  #removed $_[2] -- org -- unneeded (unneeded)
+  #removed $_[3] -- ou -- unneeded (unneeded)
+  my $provider;
   my $information_store_server;
   my $mailbox_alias_name;
-  my $org = "";
+  my $org;
   my $ou;
   my $error_num;
   my $error_name;
   my $container = "";
   my $recipients_path;
   if (scalar(@_) > 2) {
-    $ldap_provider = $_[0];
-    $information_store_server = $_[1];
-    $mailbox_alias_name = $_[2];
-    if (scalar(@_) == 3) {
+    $provider = \%{$_[0]} ;
+    $information_store_server = $provider->{server};
+    $org = $provider->{org};
+    $ou = $provider->{ou};
+    $mailbox_alias_name = $_[1];
+    if (scalar(@_) == 2) {
       #placeholder
-    } elsif (scalar(@_) == 4) {
-      $container = $_[3];
-    } elsif (scalar(@_) == 5) {
-      $org = $_[3];
-      $ou = $_[4];
+    } elsif (scalar(@_) == 3) {
+      $container = $_[2];
     } else {
       _ReportArgError("CreateMailbox [5.5] (".scalar(@_));
       return 0;
@@ -197,22 +163,14 @@ sub _E55CreateMailbox {
     _ReportArgError("CreateMailbox [5.5] (".scalar(@_));
     return 0;
   }
-  if ($org eq "") {
-    if ($ldap_provider->GetLDAPPath($information_store_server,$org,$ou)) {
-      _DebugComment("returned -> o=$org,ou=$ou\n",3);
-    } else {
-      _DebugComment("Error Returning from GetLDAPPath\n",1);
-      return 0;
-    }
-  }
   if ($container ne "") {
     $recipients_path = "LDAP://$information_store_server/$container";
   } else {
     $recipients_path = "LDAP://$information_store_server/cn=Recipients,ou=$ou,o=$org";
   }
   _DebugComment("path to create mailbox in: $recipients_path\n",3);
-  bless $ldap_provider,"Win32::OLE";
 
+  my $ldap_provider = $provider->{ad_provider};
   my $original_ole_warn_value = $Win32::OLE::Warn;
   $Win32::OLE::Warn = 0; #Turn STDERR warnings off because we probably are going to get an error (0x80072030)
 
@@ -235,7 +193,6 @@ sub _E55CreateMailbox {
     }
   }
   _DebugComment("    Box Does Not Exist (This is good)\n",3);
-  bless $ldap_provider,"Win32::Exchange::Mailbox";
 
   my $new_mailbox = $Recipients->Create("organizationalPerson", "cn=$mailbox_alias_name");
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
@@ -267,33 +224,36 @@ sub _E55CreateMailbox {
   _DebugComment("      -Mailbox created...\n",3);
 
   $Win32::OLE::Warn=$original_ole_warn_value;
-  return $new_mailbox;
+  $provider->{ad_provider} = $new_mailbox;
+  return $provider;
 }
 
 sub _E2KCreateMailbox {
+  #removed info_store_server as parameter
+  #removed dc as a parameter
   my $error_num;
   my $error_name;
   my $provider;
   my $info_store_server;
-  my $pdc;
-  my $nt_pdc;
+  my $dc;
+  my $nt_dc;
   my $mailbox_alias_name;
   my $mail_domain;
   my $storage_group;
   my $mb_store;
   my $mailbox_ldap_path;
-  if (scalar(@_) > 3) {
-    $provider = $_[0];
-    $info_store_server = $_[1];
-    $nt_pdc = $_[2];
-    $mailbox_alias_name = $_[3];
-    if (scalar(@_) == 4) {
+  if (scalar(@_) > 1) {
+    $provider = \%{$_[0]} ;
+    $info_store_server = $provider->{server};
+    $nt_dc = $provider->{dc};
+    $mailbox_alias_name = $_[1];
+    if (scalar(@_) == 2) {
       #placeholder..
-    } elsif (scalar(@_) == 5) {
-      $mailbox_ldap_path = $_[4]
-    } elsif (scalar(@_) == 6) {
-      $storage_group = $_[4];
-      $mb_store = $_[5];
+    } elsif (scalar(@_) == 3) {
+      $mailbox_ldap_path = $_[2]
+    } elsif (scalar(@_) == 4) {
+      $storage_group = $_[2];
+      $mb_store = $_[3];
     } else {
       _ReportArgError("CreateMailbox [E2K] (".scalar(@_));
       return 0;
@@ -302,28 +262,27 @@ sub _E2KCreateMailbox {
     _ReportArgError("CreateMailbox [E2K] (".scalar(@_));
     return 0;
   }
-  Win32::Exchange::_StripBackslashes($nt_pdc,$pdc); 
+  Win32::Exchange::_StripBackslashes($nt_dc,$dc); #shouldn't need this any more but we'll leave it in.
   my $user_dist_name;
-  if (!Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$pdc","(samAccountName=$mailbox_alias_name)","samAccountName,distinguishedName",$user_dist_name)) {
+  if (!Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$dc","(samAccountName=$mailbox_alias_name)","samAccountName,distinguishedName",$user_dist_name)) {
     _DebugComment("Error querying distinguished name for user in CreateMailbox (E2K)\n",1);
     return 0;
   }
  
   _DebugComment("user_dist_name = $user_dist_name\n",3);  
  
-  bless $provider,"Win32::OLE";
-  my $user_account = $provider->DataSource->Open("LDAP://$pdc/$user_dist_name",undef,adModeReadWrite);
+  my $cdo_provider = $provider->{cdo_provider};
+  my $user_account = $cdo_provider->DataSource->Open("LDAP://$dc/$user_dist_name",undef,adModeReadWrite);
   #   http://support.microsoft.com/default.aspx?scid=kb;EN-US;q321039
 
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("Failed opening NT user account for new mailbox creation on $pdc ($error_num)\n",1);
+    _DebugComment("Failed opening NT user account for new mailbox creation on $dc ($error_num)\n",1);
     return 0;
   }
-  my $info_store = $provider->GetInterface( "IMailboxStore");
+  my $info_store = $cdo_provider->GetInterface("IMailboxStore");
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("Failed opening mailbox interface on $pdc ($error_num)\n",1);
+    _DebugComment("Failed opening mailbox interface on $dc ($error_num)\n",1);
     if ($error_num eq "0x80004002") {
-
       _DebugComment("Error:  No such interface supported.\n  Note:  Make sure you have the Exchange System Manager loaded on this system\n",2);
     }
     return 0;
@@ -340,41 +299,31 @@ sub _E2KCreateMailbox {
     return 0;
   }
  
-  $provider->DataSource->Save();
+  $cdo_provider->DataSource->Save();
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("Failed saving mailbox for $mailbox_alias_name ($error_num) $error_name\n",1);
     return 0;
   }
+  $provider->{cdo_provider} = $cdo_provider;
   return $provider;
 }
 
 sub DeleteMailbox {
   my $error_num;
   my $error_name;
-  my $provider = $_[0];
+  my $provider;
+  $provider = \%{$_[0]} ;
 
-  bless $provider,"Win32::OLE";
-  Win32::OLE->LastError(0);
-  my $type = Win32::OLE->QueryObjectType($provider);
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("failed querying OLE Object for Exchange Server Determination for DeleteMailbox\n",1);
-    bless $provider,"Win32::Exchange::Mailbox";
-    return 0;
-  }
-  bless $provider,"Win32::Exchange::Mailbox";
   my $rtn = 0;
-  if ($type eq "IPerson") {
-    #IPerson returns for CDO.Person (E2K)
+  if ($provider->{version} =~ /^6\./) {
     if (_E2KDeleteMailbox(@_)) {
       $rtn = 1;
     }
   } else {
-    #nothing returns for ADsNamespaces (E5.5)
     if (_E55DeleteMailbox(@_)) {
       $rtn = 1;
     }
   }
-  bless $provider,"Win32::Exchange::Mailbox";
   return $rtn;
 }
 
@@ -383,27 +332,25 @@ sub _E2KDeleteMailbox {
     _ReportArgError("DeleteMailbox [E2K]",scalar(@_));
     return 0;
   }
-  my $mailbox = $_[0];
+  my $provider;
+  $provider = \%{$_[0]} ;
+  my $cdo_provider = $provider->{cdo_provider};
   my $error_num;
   my $error_name;
-  bless $mailbox,"Win32::OLE";
-  my $interface = $mailbox->GetInterface("IMailboxStore");
+  my $interface = $cdo_provider->GetInterface("IMailboxStore");
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("Error getting IMailboxStore interface for user mailbox deletion [E2K]\n",1);
-    bless $mailbox,"Win32::Exchange::Mailbox";
     return 0;
   }
   $interface->DeleteMailbox();
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("Error deleting user mailbox (DeleteMailbox) [E2K]\n",1);
-    bless $mailbox,"Win32::Exchange::Mailbox";
     return 0;
   }
 
-  $mailbox->Datasource->Save();
+  $cdo_provider->Datasource->Save();
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("Error deleting user mailbox (Save) [E2K]\n",1);
-    bless $mailbox,"Win32::Exchange::Mailbox";
     return 0;
   }
   _DebugComment("Mailbox deleted successfully",1);
@@ -411,16 +358,17 @@ sub _E2KDeleteMailbox {
 }
 
 sub _E55DeleteMailbox {
-  my $ldap_provider;
+  #removed info_store_server -- not needed
+  my $provider;
   my $information_store_server;
   my $mailbox_alias_name;
   my $error_num;
   my $error_name;
   my $find_mb;
-  if (scalar(@_) > 2) {
-    $ldap_provider = $_[0];
-    $information_store_server = $_[1];
-    $mailbox_alias_name = $_[2];
+  if (scalar(@_) == 2) {
+    $provider = \%{$_[0]} ;
+    $information_store_server = $provider->{server};
+    $mailbox_alias_name = $_[1];
   } else {
     _ReportArgError("DeleteMailbox [5.5] ",scalar(@_));
     return 0;
@@ -428,15 +376,15 @@ sub _E55DeleteMailbox {
   my $recipients_path;
   my $exch_mb_dn;
   my $path;
+
+  my $ldap_provider = $provider->{ad_provider};
   
-  my $Recipients = $ldap_provider->GetMailboxContainer($information_store_server,$mailbox_alias_name);
-  bless $ldap_provider,"Win32::OLE";
+  my $Recipients = $provider->GetMailboxContainer($mailbox_alias_name);
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("Failed opening recipients path on $information_store_server\n",1);
     return 0;
   }
 
-  bless $Recipients,"Win32::OLE";
   my $original_ole_warn_value = $Win32::OLE::Warn;
   $Win32::OLE::Warn = 0; #Turn STDERR warnings off because we probably are going to get an error (0x80072030) if we are creating a new box.
   
@@ -450,40 +398,92 @@ sub _E55DeleteMailbox {
   return 1;
 }
 
+sub GetMailboxContainer {
+  my $error_num;
+  my $error_name;
+  my $mbx_container;
+  my $provider;
+  $provider = \%{$_[0]} ;
+
+  if ($provider->{version} =~ /^6\./) {
+    Win32::Exchange::_DebugComment("Not a valid Function E2K (GetMailboxContainer)\n",1);
+    return 0;
+  } else {
+    if ($mbx_container = _E55GetMailboxContainer(@_)) {
+      return $mbx_container;
+    }
+  }
+  return 0;
+}
+
+sub _E55GetMailboxContainer {
+  #added this back in..  got deleted somewhere.
+  #removed info_store_server -- not needed
+  my $provider;
+  my $information_store_server;
+  my $mailbox_alias_name;
+  my $error_num;
+  my $error_name;
+  if (scalar(@_) > 2) {
+    $provider = \%{$_[0]} ;
+    $information_store_server = $provider->{server};
+    $mailbox_alias_name = $_[2];
+  } else {
+    _ReportArgError("GetMailboxContainer [5.5] ",scalar(@_));
+    return 0;
+  }
+  my $recipients_path;
+  my $exch_mb_dn;
+  my $path;
+  if (Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$information_store_server","(&(objectClass=organizationalPerson)(rdn=$mailbox_alias_name))","rdn,distinguishedName",1,$exch_mb_dn)) {
+    Win32::Exchange::_DebugComment("Exchange recipients path for mailbox found on the server\n".
+                                   "    $exch_mb_dn\n",1);
+    
+    $exch_mb_dn =~ /cn=$mailbox_alias_name,(.*)/i;
+    $path = $1;
+    $recipients_path = "LDAP://$information_store_server/$path";
+  } else {
+    Win32::Exchange::_DebugComment("Error locating Exchange Mailbox on the server.\n",1);
+    return 0;
+  }
+  
+  my $ldap_provider = $provider->{ad_provider};
+  my $Recipients = $ldap_provider->GetObject("",$recipients_path);
+  if (!Win32::Exchange::ErrorCheck("0x00000000",$error_num,$error_name)) {
+    Win32::Exchange::_DebugComment("Failed opening recipients path on $information_store_server\n",1);
+    return 0;
+  }
+  return $Recipients;
+}
+
+
+
 sub GetMailbox {
   my $error_num;
   my $error_name;
   my $mbx;
-  my $provider = $_[0];
+  my $provider;
+  $provider = \%{$_[0]} ;
 
-  bless $provider,"Win32::OLE";
-  Win32::OLE->LastError(0);
-  my $type = Win32::OLE->QueryObjectType($provider);
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("failed querying OLE Object for Exchange Server Determination for CreateMailbox\n",1);
-    bless $provider,"Win32::Exchange::Mailbox";
-    return 0;
-  }
-  bless $provider,"Win32::Exchange::Mailbox";
-  if ($type eq "IPerson") {
-    #IPerson returns for CDO.Person (E2K)
+  if ($provider->{version} =~ /^6\./) {
     if ($mbx = _E2KGetMailbox(@_)) {
-      bless $mbx,"Win32::Exchange::Mailbox";
       return $mbx;
     }
   } else {
-    #nothing returns for ADsNamespaces (E5.5)
     if ($mbx = _E55GetMailbox(@_)) {
-      bless $mbx,"Win32::Exchange::Mailbox";
       return $mbx;
     }
   }
-  bless $provider,"Win32::Exchange::Mailbox";
   return 0;
 }
 
+
 sub _E55GetMailbox {
-  my $ldap_provider;
+  #removed info_store_server - not needed
+  #removed org - not needed
+  #removed ou - not needed
+  #removed find_mb - not needed
+  my $provider;
   my $information_store_server;
   my $mailbox_alias_name;
   my $org;
@@ -491,22 +491,13 @@ sub _E55GetMailbox {
   my $error_num;
   my $error_name;
   my $find_mb;
-  if (scalar(@_) > 2) {
-    $ldap_provider = $_[0];
-    $information_store_server = $_[1];
-    $mailbox_alias_name = $_[2];
-    if (scalar(@_) == 3) {
-      if ($ldap_provider->GetLDAPPath($information_store_server,$org,$ou)) {
-        _DebugComment("returned -> o=$org,ou=$ou\n",3);
-      } else {
-        _DebugComment("Error Returning from GetLDAPPath\n",1);
-        return 0;
-      }
-    } elsif (scalar(@_) == 4) {
-      $find_mb = $_[3];
-    } elsif (scalar(@_) == 5) {
-      $org = $_[3];
-      $ou = $_[4];
+  if (scalar(@_) > 1) {
+    $provider = \%{$_[0]} ;
+    $information_store_server = $provider->{server};
+    $mailbox_alias_name = $_[1];
+    if (scalar(@_) == 2) {
+      $ou = $provider->{ou};
+      $org = $provider->{org};
     } else {
       _ReportArgError("GetMailbox [5.5]",scalar(@_));
       return 0;
@@ -517,19 +508,15 @@ sub _E55GetMailbox {
   }
   my $recipients_path;
   my $exch_mb_dn;
-  if ($find_mb == 1) {
-    if (Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$information_store_server","(&(objectClass=organizationalPerson)(rdn=$mailbox_alias_name))","rdn,distinguishedName",1,$exch_mb_dn)) {
-      $recipients_path = "LDAP://$information_store_server/$exch_mb_dn";
-    } else {
-      _DebugComment("Error locating Exchange Mailbox on the server.\n",1);
-      return 0;
-    }
+  if (Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$information_store_server","(&(objectClass=organizationalPerson)(rdn=$mailbox_alias_name))","rdn,distinguishedName",1,$exch_mb_dn)) {
+    $recipients_path = "LDAP://$information_store_server/$exch_mb_dn";
   } else {
-    $recipients_path = "LDAP://$information_store_server/cn=$mailbox_alias_name,cn=Recipients,ou=$ou,o=$org";
+    _DebugComment("Error locating Exchange Mailbox on the server.\n",1);
+    return 0;
   }
-  
-  bless $ldap_provider,"Win32::OLE";
-  my $Recipients = $ldap_provider->GetObject("",$recipients_path);
+
+  my $ldap_provider = $provider->{ad_provider};
+  my $Recipients = $provider->GetObject("",$recipients_path);
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("Failed opening recipients path on $information_store_server\n",1);
     return 0;
@@ -545,55 +532,58 @@ sub _E55GetMailbox {
     return 0;
   }
   $Win32::OLE::Warn=$original_ole_warn_value;
-  return $mailbox;
+  $provider->{ad_provider} = $mailbox;
+  return $provider;
 }
 
 sub _E2KGetMailbox {
+  #removed nt_dc -- not needed
   my $error_num;
   my $error_name;
   my $provider;
   my $mailbox_alias_name;
   my $nt_dc;
   my $dc;
-  if (scalar(@_) == 3) {
-    $provider = $_[0];
-    $nt_dc = $_[1];
-    $mailbox_alias_name = $_[2];
+  if (scalar(@_) == 2) {
+    $provider = \%{$_[0]} ;
+    $nt_dc = $provider->{dc};
+    $mailbox_alias_name = $_[1];
   } else {
     _ReportArgError("GetMailbox [E2K]",scalar(@_));
     return 0;
   }
-  Win32::Exchange::_StripBackslashes ($nt_dc,$dc);
-  bless $provider,"Win32::OLE";
+  Win32::Exchange::_StripBackslashes ($nt_dc,$dc); #probably not needed but leaving it in anyway
+
+  my $cdo_provider = $provider->{cdo_provider};
   my $user_dist_name;
   if (!Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$dc","(samAccountName=$mailbox_alias_name)","samAccountName,distinguishedName",$user_dist_name)) {
     _DebugComment("Error querying distinguished name for user in GetMailbox (E2K)\n",1);
     return 0;
   }
-  $provider->DataSource->Open("LDAP://$dc/$user_dist_name",undef,adModeReadWrite);
+  $cdo_provider->DataSource->Open("LDAP://$dc/$user_dist_name",undef,adModeReadWrite);
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("Failed opening AD user account for mailbox retrieval on $dc ($error_num)\n",1);
     return 0;
   }
-  my $user_obj_path = $provider->DataSource->{SourceURL};
+  my $user_obj_path = $cdo_provider->DataSource->{SourceURL};
   my $user_obj = Win32::OLE->GetObject($user_obj_path);
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("Failed opening SourceURL for GetMailbox ($error_num)\n",1);
     return 0;
   }
-  bless $user_obj,"Win32::OLE";
-  if (!_E2KIsMapiAware($dc,$mailbox_alias_name)) {
+  #this next part may be prone to issues if you are a native-mode Exchange install.
+  if (!$provider->_E2KIsMapiAware($mailbox_alias_name)) {
     _DebugComment("Error performing GetMailbox: user is not MAPI aware ($error_num)\n",2);
-    bless $user_obj,"Win32::Exchange::Mailbox";
     return 0;
   } else {
-    $provider->DataSource->Save();
-    bless $user_obj,"Win32::Exchange::Mailbox";
+    $cdo_provider->DataSource->Save();
+    $provider->{cdo_provider} = $cdo_provider;
     return $provider;
   }
 }
 
 sub GetUserObject {
+  #removed nt_dc -- not needed
   #Different from GetMailbox in that it gets the user object without a datasource->open.
   my $error_num;
   my $error_name;
@@ -602,48 +592,48 @@ sub GetUserObject {
   my $nt_dc;
   my $dc;
   if (scalar(@_) == 3) {
-    $provider = $_[0];
-    $nt_dc = $_[1];
-    $mailbox_alias_name = $_[2];
+    $provider = \%{$_[0]} ;
+    $nt_dc = $provider->{dc};
+    $mailbox_alias_name = $_[1];
   } else {
     _ReportArgError("GetMailbox [E2K]",scalar(@_));
     return 0;
   }
-  Win32::Exchange::_StripBackslashes ($nt_dc,$dc);
+  Win32::Exchange::_StripBackslashes ($nt_dc,$dc); #probably not needed but leaving it in anyway
   
   my $user_dist_name;
   if (!Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$dc","(samAccountName=$mailbox_alias_name)","samAccountName,distinguishedName",$user_dist_name)) {
     _DebugComment("Error querying distinguished name for user in GetMailbox (E2K)\n",1);
     return 0;
   }
+  my $ldap_provider = $provider->{ad_provider};
 
-  my $user_obj;
-  bless $provider,"Win32::OLE";
-  $user_obj = Win32::OLE->GetObject("LDAP://$dc/$user_dist_name");
+  my $user_obj = $ldap_provider->GetObject("","LDAP://$dc/$user_dist_name");
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("Failed opening distinguishedname for GetUserObject ($error_num)\n",1);
-    bless $user_obj,"Win32::Exchange::Mailbox";
-    bless $provider,"Win32::Exchange::Mailbox";
     return 0;
   }
-  bless $user_obj,"Win32::Exchange::Mailbox";
-  bless $provider,"Win32::Exchange::Mailbox";
-  return $user_obj;
+  $provider->{ad_provider} = $user_obj;
+  return $provider;
 }
 
+
 sub _E2KIsMapiAware {
+  #added provider
+  #removed nt_dc
   my $provider;
   my $mailbox_alias_name;
   my $nt_dc;
   my $dc;
   if (scalar(@_) == 2) {
-    $nt_dc = $_[0];
+    $provider = \%{$_[0]} ;
+    $nt_dc = $provider->{dc};
     $mailbox_alias_name = $_[1];
   } else {
     _ReportArgError("IsMapiAware [E2K]",scalar(@_));
     return 0;
   }
-  Win32::Exchange::_StripBackslashes ($nt_dc,$dc);
+  Win32::Exchange::_StripBackslashes ($nt_dc,$dc); #probably not needed but leaving it in anyway
   
   my $mapi_recip;
   if (Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$dc","(&(samAccountName=$mailbox_alias_name)(mapirecipient=*))","samAccountName,mapirecipient",$mapi_recip)) {
@@ -655,18 +645,21 @@ sub _E2KIsMapiAware {
 }
 
 sub _E2KIsMailboxEnabled {
+  #added provider
+  #removed nt_dc
   my $provider;
   my $mailbox_alias_name;
   my $nt_dc;
   my $dc;
   if (scalar(@_) == 2) {
-    $nt_dc = $_[0];
+    $provider = \%{$_[0]} ;
+    $nt_dc = $provider->{dc};
     $mailbox_alias_name = $_[1];
   } else {
     _ReportArgError("IsMailboxEnabled [E2K]",scalar(@_));
     return 0;
   }
-  Win32::Exchange::_StripBackslashes ($nt_dc,$dc);
+  Win32::Exchange::_StripBackslashes ($nt_dc,$dc); #probably not needed but leaving it in anyway
   
   my $user_dist_name;
   if (Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$dc","(samAccountName=$mailbox_alias_name)(mapirecipient=TRUE)","samAccountName,distinguishedName",$user_dist_name)) {
@@ -678,18 +671,21 @@ sub _E2KIsMailboxEnabled {
 }
 
 sub _E2KIsMailEnabled {
+  #added provider
+  #removed nt_dc
   my $provider;
   my $mailbox_alias_name;
   my $nt_dc;
   my $dc;
   if (scalar(@_) == 2) {
-    $nt_dc = $_[0];
+    $provider = \%{$_[0]} ;
+    $nt_dc = $provider->{dc};
     $mailbox_alias_name = $_[1];
   } else {
     _ReportArgError("IsMailEnabled [E2K]",scalar(@_));
     return 0;
   }
-  Win32::Exchange::_StripBackslashes ($nt_dc,$dc);
+  Win32::Exchange::_StripBackslashes ($nt_dc,$dc); #probably not needed but leaving it in anyway
   
   my $user_dist_name;
   if (Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$dc","(samAccountName=$mailbox_alias_name)(mapirecipient=FALSE)","samAccountName,distinguishedName",$user_dist_name)) {
@@ -703,37 +699,28 @@ sub _E2KIsMailEnabled {
 sub GetDLMembers {
   my $error_num;
   my $error_name;
-  my $provider = $_[0];
-  bless $provider,"Win32::OLE";
-  Win32::OLE->LastError(0);
-  my $type = Win32::OLE->QueryObjectType($provider);
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("failed querying OLE Object type for Exchange Server Determination during call to SetAttributes\n",1);
-    bless $provider,"Win32::Exchange::Mailbox";
-    return 0;
-  }
-  bless $provider,"Win32::Exchange::Mailbox";
-  
+  my $provider;
+  $provider = \%{$_[0]} ;
   my $rtn;
-  if ($type eq "IPerson") {
-    #IPerson returns should CDO.Person (E2K)
+  if ($provider->{version} =~ /^6\./) {
     if ($rtn = _E2KGetDLMembers(@_)) {
-      bless $provider,"Win32::Exchange::Mailbox";
       return $rtn;
     }
   } else {
-    #nothing returns for ADsNamespaces (E5.5)
     if ($rtn = _E55GetDLMembers(@_)) {
-      bless $provider,"Win32::Exchange::Mailbox";
       return $rtn;
     }
   }
-  bless $provider,"Win32::Exchange::Mailbox";
   return 0;
 }
 
 sub _E55GetDLMembers {
-  my $ldap_provider;
+  #removed server_name -- not needed
+  #removed org -- not needed
+  #removed ou -- not needed
+  my $error_num;
+  my $error_name;
+  my $provider;
   my $server_name;
   my $exch_dl_name;
   my @members;
@@ -741,30 +728,18 @@ sub _E55GetDLMembers {
   my $org;
   my $find_dl;
   my $return_prop;
-  if (scalar(@_) > 3) {
-    $ldap_provider = $_[0];
-    $server_name=$_[1];
-    $exch_dl_name=$_[2];
-    if (ref($_[3]) ne "ARRAY") {
+  if (scalar(@_) > 2) {
+    $provider = \%{$_[0]} ;
+    $server_name=$provider->{server};
+    $org=$provider->{org};
+    $ou=$provider->{ou};
+    $exch_dl_name=$_[1];
+    if (ref($_[2]) ne "ARRAY") {
       _DebugComment("members list must be an array reference\n",1);
       return 0;
     }
-    if (scalar(@_) < 7) {
-      if (scalar(@_) == 5) {
-        $return_prop = $_[4];      
-      }
-      if ($ldap_provider->GetLDAPPath($server_name,$org,$ou)) {
-        _DebugComment("returned -> o=$org,ou=$ou\n",3);
-      } else {
-        _DebugComment("Error Returning from GetLDAPPath\n",1);
-        return 0;
-      }
-      if (scalar(@_) == 5) {
-        $find_dl = $_[4];
-      }
-    } elsif (scalar(@_) == 6) {
-      $org = $_[5];
-      $ou = $_[6];
+    if (scalar(@_) == 4) {
+      $return_prop = $_[3];      
     } else {
       _ReportArgError("GetDLMembers [5.5]",scalar(@_));
       return 0;
@@ -777,33 +752,22 @@ sub _E55GetDLMembers {
   my $temp_exch_dl;
   my $original_ole_warn_value = $Win32::OLE::Warn;
 
-  bless $ldap_provider,"Win32::OLE";
   my $exch_dl_dn;
   my $exch_dl_path;
-  my $temp_dl_path;
-  my $exch_dl;
   if ($exch_dl_name =~ /^cn=.*ou=.*o=.*/) {
     #a dn was sent
     $exch_dl_path = "LDAP://$server_name/$exch_dl_name";
     $exch_dl_dn = $exch_dl_name;
   } else {
-    if ($find_dl == 1) {
-      if (Win32::Exchange::_AdodbExtendedSearch($exch_dl_name,"LDAP://$server_name","(&(objectClass=groupOfNames)(cn=$exch_dl_name))","cn,distinguishedName",$exch_dl_dn)) {
-        $exch_dl_path = "LDAP://$server_name/$exch_dl_dn";
-      } else {
-        _DebugComment("Error locating Exchange DL on the server.  Member information unavailable.\n",1);
-        return 0;
-      }
+    if (Win32::Exchange::_AdodbExtendedSearch($exch_dl_name,"LDAP://$server_name","(&(objectClass=groupOfNames)(cn=$exch_dl_name))","cn,distinguishedName",$exch_dl_dn)) {
+      $exch_dl_path = "LDAP://$server_name/$exch_dl_dn";
     } else {
-      #an alias was sent (name only, check default container)
-      $exch_dl_path = "LDAP://$server_name/cn=$exch_dl_name,cn=Distribution Lists,ou=$ou,o=$org";
-      $exch_dl_dn = "cn=$exch_dl_name,cn=Distribution Lists,ou=$ou,o=$org";
+      _DebugComment("Error locating Exchange DL on the server.  Member information unavailable.\n",1);
+      return 0;
     }
   }
-  $exch_dl = $ldap_provider->GetObject("",$exch_dl_path);
-
-  my $error_num;
-  my $error_name;
+  my $ldap_provider = $provider->{ad_provider};
+  my $exch_dl = $ldap_provider->GetObject("",$exch_dl_path);
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("error querying distribution list ($exch_dl_name) -> $error_num ($error_name)\n",1);
     return 0;
@@ -818,104 +782,16 @@ sub _E55GetDLMembers {
           _DebugComment("Failed Adodb search for member property ($return_prop)\n",1);
           return 0;
         }
-        push (@{$_[3]}, $search_prop);
-      }
-      return 1;
-    } else {
-      @{$_[3]} = @{$exch_dl->{Members}};
-      return 1;
-
-    }
-  } else {    
-    _DebugComment("      -Less than 2 members are named in this distribution list -- $return_prop\n",3);
-    my $member = $exch_dl->{Members};
-    if ($member) {
-      _DebugComment("      -1 member exists -- $return_prop\n",3);
-      if (lc($return_prop) ne 'distinguishedname') {
-        my $search_prop;
-        if (!Win32::Exchange::_AdodbExtendedSearch($member,"LDAP://RootDSE/dnsHostName","(distinguishedName=$member)","distinguishedName,$return_prop",$search_prop)) {
-          _DebugComment("Failed Adodb search for member property ($return_prop)\n",1);
-          return 0;
-        }
-        push (@{$_[3]}, $search_prop);
-      } else {
-        push (@{$_[3]}, $member);
-      }
-      return 1;
-    } else {
-      _DebugComment("      -0 members exists -- $return_prop\n",1);
-      return 1;
-    }
-  }
-}
-
-sub _E2KGetDLMembers {
-  my $error_num;
-  my $error_name;
-  my $group_dn;
-  my $user_dn;
-  my $provider = $_[0];
-  my $group = $_[1];
-  my $return_prop = 'distinguishedName';
-  if (scalar(@_) != 3) {
-    if (scalar(@_) == 4) {
-      $return_prop = $_[3];
-    } else {
-      _ReportArgError("GetdDLMembers (E2K)",scalar(@_));
-      return 0;
-    }
-  }
-  if (ref($_[2]) ne "ARRAY") {
-    _DebugComment("Third argument is the list of users you want return, and should be an array reference, but instead, it was a(an): ".ref($_[2])." reference\n",1);
-    return 0;
-  }
-
-  if (!Win32::Exchange::_AdodbExtendedSearch($group,"LDAP://RootDSE/dnsHostName","(&(objectClass=group)(samAccountName=$group))","samAccountName,distinguishedName",$group_dn)) {
-    _DebugComment("Failed Adodb search for dist list\n",1);
-    return 0;
-  }
-
-  my $RootDSE = Win32::OLE->GetObject("LDAP://RootDSE");
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("Failed Getting RootDSE ($error_num)\n",1);
-    return 0;
-  }
-  my $dc = $RootDSE->Get("dnsHostName");
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("Error getting RootDSE dns host name ($error_num)\n",1);
-    return 0;
-  }
-  my @dc_array = split(/\./,$dc);
-  my $ldap_obj = Win32::OLE->new("ADsNamespaces");
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("Error creating new ADsNamespaces object ($error_num)\n",1);
-    return 0;
-  }
-  my $group_obj = $ldap_obj->GetObject("","LDAP://$dc_array[0]/$group_dn");
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("Error opening distribution list on $dc_array[0] ($error_num)\n",1);
-    return 0;
-  }
-  if (ref($group_obj->{Member}) eq "ARRAY") {
-    _DebugComment("      -Array (2 or more members exist -- $return_prop)\n",3);
-    if (lc($return_prop) ne 'distinguishedname') {
-      foreach my $member (@{$group_obj->{Member}}) {
-        my $search_prop;
-        if (!Win32::Exchange::_AdodbExtendedSearch($member,"LDAP://RootDSE/dnsHostName","(distinguishedName=$member)","distinguishedName,$return_prop",$search_prop)) {
-          _DebugComment("Failed Adodb search for member property ($return_prop)\n",1);
-          return 0;
-        }
         push (@{$_[2]}, $search_prop);
       }
       return 1;
     } else {
-      @{$_[2]} = @{$group_obj->{Member}};
+      @{$_[2]} = @{$exch_dl->{Members}};
       return 1;
-
     }
   } else {    
     _DebugComment("      -Less than 2 members are named in this distribution list -- $return_prop\n",3);
-    my $member = $group_obj->{Member};
+    my $member = $exch_dl->{Members};
     if ($member) {
       _DebugComment("      -1 member exists -- $return_prop\n",3);
       if (lc($return_prop) ne 'distinguishedname') {
@@ -936,45 +812,104 @@ sub _E2KGetDLMembers {
   }
 }
 
-sub SetAttributes {
+sub _E2KGetDLMembers {
   my $error_num;
   my $error_name;
-  my $provider = $_[0];
-
-  bless $provider,"Win32::OLE";
-  Win32::OLE->LastError(0);
-  my $type = Win32::OLE->QueryObjectType($provider);
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("failed querying OLE Object type for Exchange Server Determination during call to SetAttributes\n",1);
-    bless $provider,"Win32::Exchange::Mailbox";
+  my $group_dn;
+  my $user_dn;
+  my $provider;
+  $provider = \%{$_[0]} ;
+  my $group = $_[1];
+  my $return_prop = 'distinguishedName';
+  if (scalar(@_) != 3) {
+    if (scalar(@_) == 4) {
+      $return_prop = $_[3];
+    } else {
+      _ReportArgError("GetdDLMembers (E2K)",scalar(@_));
+      return 0;
+    }
+  }
+  my $dc = $provider->{dc};
+  if (ref($_[2]) ne "ARRAY") {
+    _DebugComment("Third argument is the list of users you want return, and should be an array reference, but instead, it was a(an): ".ref($_[2])." reference\n",1);
     return 0;
   }
-  bless $provider,"Win32::Exchange::Mailbox";
+
+  if (!Win32::Exchange::_AdodbExtendedSearch($group,"LDAP://$dc","(&(objectClass=group)(samAccountName=$group))","samAccountName,distinguishedName",$group_dn)) {
+    _DebugComment("Failed Adodb search for dist list\n",1);
+    return 0;
+  }
+
+  my $ldap_obj = $provider->{ad_provider};
+  my $group_obj = $ldap_obj->GetObject("","LDAP://$dc/$group_dn");
+  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error opening distribution list on $dc ($error_num)\n",1);
+    return 0;
+  }
+  if (ref($group_obj->{Member}) eq "ARRAY") {
+    _DebugComment("      -Array (2 or more members exist -- $return_prop)\n",3);
+    if (lc($return_prop) ne 'distinguishedname') {
+      foreach my $member (@{$group_obj->{Member}}) {
+        my $search_prop;
+        if (!Win32::Exchange::_AdodbExtendedSearch($member,"LDAP://$dc","(distinguishedName=$member)","distinguishedName,$return_prop",$search_prop)) {
+          _DebugComment("Failed Adodb search for member property ($return_prop)\n",1);
+          return 0;
+        }
+        push (@{$_[2]}, $search_prop);
+      }
+      return 1;
+    } else {
+      @{$_[2]} = @{$group_obj->{Member}};
+      return 1;
+
+    }
+  } else {    
+    _DebugComment("      -Less than 2 members are named in this distribution list -- $return_prop\n",3);
+    my $member = $group_obj->{Member};
+    if ($member) {
+      _DebugComment("      -1 member exists -- $return_prop\n",3);
+      if (lc($return_prop) ne 'distinguishedname') {
+        my $search_prop;
+        if (!Win32::Exchange::_AdodbExtendedSearch($member,"LDAP://$dc","(distinguishedName=$member)","distinguishedName,$return_prop",$search_prop)) {
+          _DebugComment("Failed Adodb search for member property ($return_prop)\n",1);
+          return 0;
+        }
+        push (@{$_[2]}, $search_prop);
+      } else {
+        push (@{$_[2]}, $member);
+      }
+      return 1;
+    } else {
+      _DebugComment("      -0 members exists -- $return_prop\n",1);
+      return 1;
+    }
+  }
+}
+
+sub SetAttributes {
+  my $provider;
+  $provider = \%{$_[0]} ;
   my $rtn;
-  if ($type eq "IPerson") {
-    #IPerson returns should CDO.Person (E2K)
+  if ($provider->{version} =~ /^6\./) {
     if ($rtn = _E2KSetAttributes(@_)) {
-      bless $provider,"Win32::Exchange::Mailbox";
       return $rtn;
     }
   } else {
-    #nothing returns for ADsNamespaces (E5.5)
     if ($rtn = _E55SetAttributes(@_)) {
-      bless $provider,"Win32::Exchange::Mailbox";
       return $rtn;
     }
   }
-  bless $provider,"Win32::Exchange::Mailbox";
   return 0;
 }
+
 
 sub _E55SetAttributes {
   my $error_num;
   my $error_name;
-  my $mailbox;
+  my $provider;
   my %attrs;
   if (scalar(@_) == 2) {
-    $mailbox = $_[0];
+    $provider = \%{$_[0]} ;
     if (ref($_[1]) ne "HASH") {
       _DebugComment("second object passed to SetAttributes was not a HASH reference -> $error_num ($error_name)\n",1);
       return 0;
@@ -985,9 +920,9 @@ sub _E55SetAttributes {
     _ReportArgError("SetAttributes [E55]",scalar(@_));
     return 0;
   }
+  my $mailbox = $provider->{ad_provider};
   my $original_ole_warn_value=$Win32::OLE::Warn;
   $Win32::OLE::Warn=0;
-  bless $mailbox,"Win32::OLE";
   foreach my $attr (keys %attrs) {
     $mailbox->Put($attr => $attrs{$attr}); 
   }
@@ -997,7 +932,6 @@ sub _E55SetAttributes {
     $Win32::OLE::Warn=$original_ole_warn_value;
     return 0;
   }
-  $Win32::OLE::Warn=$original_ole_warn_value;
   return 1;
 }
 
@@ -1005,10 +939,10 @@ sub _E2KSetAttributes {
   my $error_num;
   my $error_name;
   my %attrs;
-  my $user_account;
+  my $provider;
   my $mailbox;
   if (scalar(@_) == 2) {
-    $user_account = $_[0];
+    $provider = \%{$_[0]} ;
     if (ref($_[1]) ne "HASH") {
       _DebugComment("second object passed to SetAttributes was not a HASH reference -> $error_num ($error_name)\n",1);
       return 0;
@@ -1019,7 +953,7 @@ sub _E2KSetAttributes {
     _ReportArgError("SetAttributes [2K]",scalar(@_));
     return 0;
   }
-  bless $user_account,"Win32::OLE";
+  my $user_account = $provider->{cdo_provider};
   foreach my $interface (keys %attrs) {
     my $mailbox_interface = $user_account->GetInterface($interface);
     if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
@@ -1048,44 +982,28 @@ sub _E2KSetAttributes {
 }
 
 sub GetOwner {
-  my $error_num;
-  my $error_name;
-  my $provider = $_[0];
+  my $provider;
+  $provider = \%{$_[0]} ;
 
-  bless $provider,"Win32::OLE";
-  Win32::OLE->LastError(0);
-  my $type = Win32::OLE->QueryObjectType($provider);
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("failed querying OLE Object type for GetOwner\n",1);
-    bless $provider,"Win32::Exchange::Mailbox";
-    return 0;
-  }
-  bless $provider,"Win32::Exchange::Mailbox";
-  
   my $rtn;
-  if ($type eq "IPerson") {
-    #IPerson returns should CDO.Person (E2K)
-    #no available support for this operation
-    bless $provider,"Win32::Exchange::Mailbox";
+  if ($provider eq "6.0") {
+    #no available support for this operation yet
     return 0;
   } else {
-    #nothing returns for ADsNamespaces (E5.5)
     if ($rtn = _E55GetOwner(@_)) {
-      bless $provider,"Win32::Exchange::Mailbox";
       return $rtn;
     }
   }
-  bless $provider,"Win32::Exchange::Mailbox";
   return 0;
 }
 
 sub _E55GetOwner {
   my $error_num;
   my $error_name;
-  my $mailbox;
+  my $provider;
   my $returned_sid_type;
   if (scalar(@_) > 1) {
-    $mailbox = $_[0];
+    $provider = \%{$_[0]} ;
     if (scalar(@_) == 2) {
       $returned_sid_type = ADS_SID_WINNT_PATH;    
     } elsif (scalar(@_) == 3) {
@@ -1098,9 +1016,7 @@ sub _E55GetOwner {
     _ReportArgError("GetOwner [5.5]",scalar(@_));
     return 0;
   }
-
-
-  bless $mailbox,"Win32::OLE";
+  my $mailbox = $provider->{ad_provider}; 
 
   my $sid = Win32::OLE->new("ADsSID");
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
@@ -1140,7 +1056,9 @@ sub SetOwner {
     _ReportArgError("SetOwner [5.5]",scalar(@_));
     return 0;
   }
-  my $new_mailbox = $_[0];
+  my $provider;
+  $provider = \%{$_[0]} ;
+  my $new_mailbox = $provider->{ad_provider};
   my $username = $_[1];
 
   if ($username  =~ /(.*)\\(.*)/) {
@@ -1169,46 +1087,29 @@ sub SetOwner {
     return 0;
   }
 
-  bless $new_mailbox,"Win32::OLE";
   $new_mailbox->Put("Assoc-NT-Account", $sidHex );
   $new_mailbox->SetInfo;
 
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("error setting owner information on mailbox -> $error_num ($error_name)\n",1);
-    bless $new_mailbox,"Win32::Exchange::Mailbox";
     return 0;      
   }
-  bless $new_mailbox,"Win32::Exchange::Mailbox";
   return 1;
 }
-sub GetPerms {
-  my $error_num;
-  my $error_name;
-  my $provider = $_[0];
 
-  bless $provider,"Win32::OLE";
-  Win32::OLE->LastError(0);
-  my $type = Win32::OLE->QueryObjectType($provider);
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("failed querying OLE Object type for Exchange Server Determination during call to SetAttributes\n",1);
-    bless $provider,"Win32::Exchange::Mailbox";
-    return 0;
-  }
-  bless $provider,"Win32::Exchange::Mailbox";
-  
+sub GetPerms {
+  my $provider;
+  $provider = \%{$_[0]} ;
+
   my $rtn;
-  if ($type eq "IPerson") {
-    #IPerson returns should CDO.Person (E2K)
+  if ($provider->{version} =~ /^6\./) {
     #Sorry, not implemented yet
     return 0;
   } else {
-    #nothing returns for ADsNamespaces (E5.5)
     if ($rtn = _E55GetPerms(@_)) {
-      bless $provider,"Win32::Exchange::Mailbox";
       return $rtn;
     }
   }
-  bless $provider,"Win32::Exchange::Mailbox";
   return 0;
 }
 
@@ -1222,7 +1123,9 @@ sub _E55GetPerms {
     _DebugComment("permissions list must be an array reference (e55)\n",1);
     return 0;
   }
-  my $mailbox = $_[0];
+  my $provider;
+  $provider = \%{$_[0]} ;
+  my $mailbox = $provider->{ad_provider};
 
   my $sec = Win32::OLE->CreateObject("ADsSecurity");
   my $error_num;
@@ -1235,8 +1138,6 @@ sub _E55GetPerms {
     return 0;
   }
 
-  bless $mailbox,"Win32::OLE";
-  
   my $sd = $sec->GetSecurityDescriptor($mailbox->{ADsPath});
   
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
@@ -1253,35 +1154,19 @@ sub _E55GetPerms {
 }
 
 sub SetPerms {
-  my $error_num;
-  my $error_name;
-  my $provider = $_[0];
+  my $provider;
+  $provider = \%{$_[0]} ;
 
-  bless $provider,"Win32::OLE";
-  Win32::OLE->LastError(0);
-  my $type = Win32::OLE->QueryObjectType($provider);
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("failed querying OLE Object type for Exchange Server Determination during call to SetAttributes\n",1);
-    bless $provider,"Win32::Exchange::Mailbox";
-    return 0;
-  }
-  bless $provider,"Win32::Exchange::Mailbox";
-  
   my $rtn;
-  if ($type eq "IPerson") {
-    #IPerson returns should CDO.Person (E2K)
+  if ($provider->{version} =~ /^6\./) {
     if ($rtn = _E2KSetPerms(@_)) {
-      bless $provider,"Win32::Exchange::Mailbox";
       return $rtn;
     }
   } else {
-    #nothing returns for ADsNamespaces (E5.5)
     if ($rtn = _E55SetPerms(@_)) {
-      bless $provider,"Win32::Exchange::Mailbox";
       return $rtn;
     }
   }
-  bless $provider,"Win32::Exchange::Mailbox";
   return 0;
 }
 
@@ -1294,7 +1179,9 @@ sub _E55SetPerms {
     _DebugComment("permissions list must be an array reference (e55)\n",1);
     return 0;
   }
-  my $new_mailbox = $_[0];
+  my $provider;
+  $provider = \%{$_[0]} ;
+  my $new_mailbox = $provider->{ad_provider};
   my @perms_list = @{$_[1]};
 
   my $sec = Win32::OLE->CreateObject("ADsSecurity");
@@ -1308,8 +1195,6 @@ sub _E55SetPerms {
     return 0;
   }
 
-  bless $new_mailbox,"Win32::OLE";
-  
   my $sd = $sec->GetSecurityDescriptor($new_mailbox->{ADsPath});
   
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
@@ -1380,10 +1265,10 @@ sub _E2KSetPerms {
     return 0;
   }
 
-  my $cdo_user_obj = $_[0];
+  my $provider;
+  $provider = \%{$_[0]} ;
+  my $cdo_user_obj = $provider->{cdo_provider};
   my @perms_list = @{$_[1]};
-
-  bless $cdo_user_obj,"Win32::OLE";
 
   my $ldap_user_path = $cdo_user_obj->{DataSource}->{SourceURL};
   my $ldap_user_obj = Win32::OLE->GetObject($ldap_user_path);
@@ -1467,47 +1352,34 @@ sub _E2KSetPerms {
 }
 
 sub MailEnable {
-  my $error_num;
-  my $error_name;
-  my $provider = $_[0];
-  bless $provider,"Win32::OLE";
-  Win32::OLE->LastError(0);
-  my $type = Win32::OLE->QueryObjectType($provider);
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("failed querying OLE Object type for Exchange Server Determination during call to MailEnable\n",1);
-    bless $provider,"Win32::Exchange::Mailbox";
-    return 0;
-  }
-  bless $provider,"Win32::Exchange::Mailbox";
+  my $provider;
+  $provider = \%{$_[0]} ;
+
   my $rtn;
-  if ($type eq "IPerson") {
-    #IPerson returns should CDO.Person (E2K)
+  if ($provider->{version} =~ /^6\./) {
     if ($rtn = _E2KMailEnable(@_)) {
-      bless $provider,"Win32::Exchange::Mailbox";
       return $rtn;
     }
   } else {
-    #nothing returns for ADsNamespaces (E5.5)
     if ($rtn = _E55MailEnable(@_)) {
-      bless $provider,"Win32::Exchange::Mailbox";
       return $rtn;
     }
   }
-  bless $provider,"Win32::Exchange::Mailbox";
   return 0;
 }
 
 sub _E2KMailEnable {
+  #removed user_object - not needed
+  my $provider;
   my $user_obj;
   my $interface;
   my $smtp_address = "";
   my $error_num;
   my $error_name;
   if (scalar(@_) > 0) {
-    #The provider is useless at this point
-    #$provider = $_[0];
-    if (scalar(@_) == 3) {
-      $user_obj = $_[1];
+    $provider = \%{$_[0]} ;
+    $user_obj = $provider->{ad_provider};
+    if (scalar(@_) == 2) {
       $smtp_address = $_[2];
       if (!($smtp_address =~ /^smtp:.*/i && $smtp_address ne "")) {
         $smtp_address = "smtp:".$smtp_address;
@@ -1520,11 +1392,9 @@ sub _E2KMailEnable {
     _ReportArgError("MailEnable (E2K)",scalar(@_));
     return 0;
   }
-  bless $user_obj,"Win32::OLE";
   
   my $dn = $user_obj->{ADsPath};
-  $dn =~ /LDAP:\/\/(.*)\/.*/;
-  my $dc = $1;
+  my $dc = $provider->{dc};
   if (_E2KIsMapiAware($dc,$user_obj->{samaccountname})) {
     _DebugComment("user account is already MAPI aware.  Cannot proceed with MailEnable (E2K)\n",0);
     return 0;  
@@ -1543,7 +1413,6 @@ sub _E2KMailEnable {
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("error performing MailEnable on AD user object (E2K) -> $error_num ($error_name)\n",1);
     return 0;
-    print "2\n";
   }
 
   $user_obj->Datasource->Save();
@@ -1595,62 +1464,42 @@ sub _E55MailEnable {
 }
 
 sub MailDisable {
-  my $error_num;
-  my $error_name;
-  my $provider = $_[0];
-  bless $provider,"Win32::OLE";
-  Win32::OLE->LastError(0);
-  my $type = Win32::OLE->QueryObjectType($provider);
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("failed querying OLE Object type for Exchange Server Determination during call to MailEnable\n",1);
-    bless $provider,"Win32::Exchange::Mailbox";
-    return 0;
-  }
-  bless $provider,"Win32::Exchange::Mailbox";
-  
+  my $provider;
+  $provider = \%{$_[0]} ;
+
   my $rtn;
-  if ($type eq "IPerson") {
-    #IPerson returns should CDO.Person (E2K)
+  if ($provider->{version} =~ /^6\./) {
     if ($rtn = _E2KMailDisable(@_)) {
-      bless $provider,"Win32::Exchange::Mailbox";
       return $rtn;
     }
   } else {
     #nothing returns for ADsNamespaces (E5.5)
     if ($rtn = _E55MailDisable(@_)) {
-      bless $provider,"Win32::Exchange::Mailbox";
       return $rtn;
     }
   }
-  bless $provider,"Win32::Exchange::Mailbox";
   return 0;
 }
 
 sub _E2KMailDisable {
   my $user_obj;
+  my $provider;
   my $interface;
   my $smtp_address = "";
   my $error_num;
   my $error_name;
   if (scalar(@_) > 0) {
-    #The provider is useless at this point
-    #$provider = $_[0];
-    if (scalar(@_) == 2) {
-      $user_obj = $_[1];
-    } else {
-      _ReportArgError("MailDisable (E2K)",scalar(@_));
-      return 0;
-    }
+    $provider = \%{$_[0]} ;
+    $user_obj = $provider->{ad_provider};
   } else {
     _ReportArgError("MailDisable (E2K)",scalar(@_));
     return 0;
   }
-  bless $user_obj,"Win32::OLE";
 
   my $dn = $user_obj->{ADsPath};
   $dn =~ /LDAP:\/\/(.*)\/.*/;
   my $dc = $1;
-  if (!_E2KIsMailEnabled($dc,$user_obj->{samaccountname})) {
+  if (!$provider->_E2KIsMailEnabled($user_obj->{samaccountname})) {
     _DebugComment("user account is not MailEnabled.  Cannot proceed with MailDisable (E2K)\n",0);
     return 0;  
   }
@@ -1682,71 +1531,46 @@ sub _E55MailDisable {
 }
 
 sub AddDLMembers {
-  my $error_num;
-  my $error_name;
-  my $provider = $_[0];
-  bless $provider,"Win32::OLE";
-  Win32::OLE->LastError(0);
-  my $type = Win32::OLE->QueryObjectType($provider);
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("failed querying OLE Object type for Exchange Server Determination during call to SetAttributes\n",1);
-    bless $provider,"Win32::Exchange::Mailbox";
-    return 0;
-  }
-  bless $provider,"Win32::Exchange::Mailbox";
-  
+  my $provider;
+  $provider = \%{$_[0]} ;
+
   my $rtn;
-  if ($type eq "IPerson") {
-    #IPerson returns should CDO.Person (E2K)
+  if ($provider->{version} =~ /^6\./) {
     if ($rtn = _E2KAddDLMembers(@_)) {
-      bless $provider,"Win32::Exchange::Mailbox";
       return $rtn;
     }
   } else {
     #nothing returns for ADsNamespaces (E5.5)
     if ($rtn = _E55AddDLMembers(@_)) {
-      bless $provider,"Win32::Exchange::Mailbox";
       return $rtn;
     }
   }
-  bless $provider,"Win32::Exchange::Mailbox";
   return 0;
 }
 
 sub _E55AddDLMembers {
-  my $ldap_provider;
+  #removed servername -- not needed
+  #removed org -- not needed
+  #removed ou -- not needed
+  #removed find_dl -- not needed
+  my $provider;
   my $server_name;
   my $exch_dl_name;
   my @new_members;
   my $ou;
   my $org;
   my $find_dl;
-  if (scalar(@_) > 3) {
-    $ldap_provider = $_[0];
-    $server_name=$_[1];
-    $exch_dl_name=$_[2];
-    if (ref($_[3]) ne "ARRAY") {
+  if (scalar(@_) == 3) {
+    $provider = \%{$_[0]} ;
+    $server_name=$provider->{server};
+    $org = $provider->{org};
+    $ou = $provider->{ou};
+    $exch_dl_name=$_[1];
+    if (ref($_[2]) ne "ARRAY") {
       _DebugComment("members list must be an array reference\n",1);
       return 0;
     }
-    @new_members=@{$_[3]};
-    if (scalar(@_) < 6) {
-      if ($ldap_provider->GetLDAPPath($server_name,$org,$ou)) {
-        _DebugComment("returned -> o=$org,ou=$ou\n",3);
-      } else {
-        _DebugComment("Error Returning from GetLDAPPath\n",1);
-        return 0;
-      }
-      if (scalar(@_) == 5) {
-        $find_dl = $_[4];
-      }
-    } elsif (scalar(@_) == 6) {
-      $org = $_[4];
-      $ou = $_[5];
-    } else {
-      _ReportArgError("AddDLMembers [5.5]",scalar(@_));
-      return 0;
-    }
+    @new_members=@{$_[2]};
   } else {
     _ReportArgError("AddDLMembers [5.5]",scalar(@_));
     return 0;
@@ -1755,11 +1579,8 @@ sub _E55AddDLMembers {
   my $temp_exch_dl;
   my $original_ole_warn_value = $Win32::OLE::Warn;
 
-  bless $ldap_provider,"Win32::OLE";
   my $exch_dl_dn;
   my $exch_dl_path;
-  my $temp_dl_path;
-  my $exch_dl;
   if ($exch_dl_name =~ /^cn=.*ou=.*o=.*/) {
     #a dn was sent
     $exch_dl_path = "LDAP://$server_name/$exch_dl_name";
@@ -1778,7 +1599,8 @@ sub _E55AddDLMembers {
       $exch_dl_dn = "cn=$exch_dl_name,cn=Distribution Lists,ou=$ou,o=$org";
     }
   }
-  $exch_dl = $ldap_provider->GetObject("",$exch_dl_path);
+  my $ldap_provider = $provider->{ad_provider};
+  my $exch_dl = $ldap_provider->GetObject("",$exch_dl_path);
 
   my $error_num;
   my $error_name;
@@ -1808,13 +1630,9 @@ sub _E55AddDLMembers {
     if ($username =~ /^cn=.*ou=.*o=.*$/) {
       $exch_mb_dn = $username;
     } else {
-      if ($find_dl == 1) {
-        if (!Win32::Exchange::_AdodbExtendedSearch($username,"LDAP://$server_name","(&(objectClass=organizationalPerson)(rdn=$username))","rdn,distinguishedName",$exch_mb_dn)) {
-          _DebugComment("Error locating Exchange mailbox on the server.  Member addition cannot proceed.\n",1);
-          return 0;
-        }
-      } else {
-        $exch_mb_dn = "cn=$username,cn=Recipients,ou=$ou,o=$org";
+      if (!Win32::Exchange::_AdodbExtendedSearch($username,"LDAP://$server_name","(&(objectClass=organizationalPerson)(rdn=$username))","rdn,distinguishedName",$exch_mb_dn)) {
+        _DebugComment("Error locating Exchange mailbox on the server.  Member addition cannot proceed.\n",1);
+        return 0;
       }
     }
     my $duplicate;
@@ -1851,44 +1669,31 @@ sub _E2KAddDLMembers {
   my $error_name;
   my $group_dn;
   my $user_dn;
-  my $provider = $_[0];
+  my $provider;
+  $provider = \%{$_[0]} ;
+  my $dc = $provider->{dc};
+  my $ldap_provider = $provider->{ad_provider};
   my $group = $_[1];
   my @user_list = @{$_[2]};
 
-  if (!Win32::Exchange::_AdodbExtendedSearch($group,"LDAP://RootDSE/dnsHostName","(&(objectClass=group)(samAccountName=$group))","samAccountName,distinguishedName",$group_dn)) {
+
+  if (!Win32::Exchange::_AdodbExtendedSearch($group,"LDAP://$dc","(&(objectClass=Group)(samAccountName=$group))","samAccountName,distinguishedName",$group_dn)) {
     _DebugComment("Failed Adodb search for dist list\n",1);
     return 0;
   }
 
   foreach my $username (@user_list) {
     _DebugComment("Adding $username to $group\n",4);
-    if (!Win32::Exchange::_AdodbExtendedSearch($username,"LDAP://RootDSE/dnsHostName","(&(objectClass=user)(samAccountName=$username))","samAccountName,distinguishedName",$user_dn)) {
+    if (!Win32::Exchange::_AdodbExtendedSearch($username,"LDAP://$dc","(&(objectClass=user)(samAccountName=$username))","samAccountName,distinguishedName",$user_dn)) {
       _DebugComment("Failed Adodb search for user: $username\n",1);
       return 0;
     }
-    my $RootDSE = Win32::OLE->GetObject("LDAP://RootDSE");
+    my $group_obj = $ldap_provider->GetObject("","LDAP://$dc/$group_dn");
     if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-      _DebugComment("Failed Getting RootDSE ($error_num)\n",1);
+      _DebugComment("Error opening distribution list on $dc ($error_num)\n",1);
       return 0;
     }
-    my $dc = $RootDSE->Get("dnsHostName");
-    if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-      _DebugComment("Error getting RootDSE dns host name ($error_num)\n",1);
-      return 0;
-    }
-    my @dc_array = split(/\./,$dc);
-    my $ldap_obj = Win32::OLE->new("ADsNamespaces");
-    if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-      _DebugComment("Error creating new ADsNamespaces object ($error_num)\n",1);
-      return 0;
-    }
-    my $group_obj = $ldap_obj->GetObject("","LDAP://$dc_array[0]/$group_dn");
-    if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-      _DebugComment("Error opening distribution list on $dc_array[0] ($error_num)\n",1);
-      return 0;
-    }
-  
-    $group_obj->Add("LDAP://$dc_array[0]/$user_dn");
+    $group_obj->Add("LDAP://$dc/$user_dn");
     if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
       if ($error_num eq "0x80071392") {
         _DebugComment("Error adding user ($username) to distribution list [they are already a member]\n",1);

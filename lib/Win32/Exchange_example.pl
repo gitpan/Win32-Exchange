@@ -1,8 +1,6 @@
 use Win32::Exchange;
-
 $domain = Win32::DomainName();
-$info_store_server="YOURMAILBOXSERVERNAME";
-$pdc = Win32::Exchange::FindCloseDC($info_store_server);
+$info_store_server="YOUREXCHANGESERVERNAMEHERE";
 $mta_server=$info_store_server; # this could be different, but for testing, we'll set them the same
 
 #  start E2K only
@@ -16,7 +14,7 @@ $mailbox_alias_name='bgates'; # username
 $givenName = "Bill"; # firstname
 $sn = "Gates"; # lastname
 $mailbox_full_name="$givenName $mailbox_alias_name $sn";
-$distribution_list="Users"; # group the user will be in.
+$distribution_list="Users"; # group / DL the user will be added to.
 $email_domain = "microsoft.com"; # remote part of the final email address
 $trustee_group = "Domain Admins"; # the group that has permission to log into this mailbox as well as the recipient
 
@@ -28,33 +26,27 @@ if (!Win32::Exchange::GetVersion($info_store_server,\%ver) ) {
 print "version      = $ver{ver}\n";
 print "build        = $ver{build}\n";
 print "service pack = $ver{sp}\n";
-if (!($provider = Win32::Exchange::Mailbox->new($ver{'ver'}))) {
+if (!($provider = Win32::Exchange::Mailbox->new($info_store_server))) {
   print "$rtn - Error returning into main from new ($Win32::Exchange::VERSION)\n";
   exit 0;
 }
 
 my @PermsUsers;
-push (@PermsUsers,"$domain\\$mailbox_alias_name");
+#in E2K, by default the SELF account has access to the mailbox (the self account is
+#  the user account that is attached to the mailbox).
+#
+#So, only push the user in the case of an E55 mailbox.
 push (@PermsUsers,"$domain\\$trustee_group"); #Group that needs perms to the mailbox...
 
 if ($ver{ver} eq "5.5") {
-
-        e55(); # Exchange 5.5 instructions.     
-
-} elsif ($ver{ver} eq "6.0") {
-
-        e60(); # Exchange 6.0 instructions.
+  push (@PermsUsers,"$domain\\$mailbox_alias_name");
+  e55(); # Exchange 5.5
+} elsif ($ver{ver} =~ /^6\../) {
+  e60(); # E2K03 is the same as E2K.
 }
 
 sub e55 {
-
-if (!Win32::Exchange::GetLDAPPath($info_store_server,$org,$ou)) {
-    print "Error returning into main from GetLDAPPath\n";
-    exit 0;
-  }
-  print "GetLDAPPath succeeded\n";
-  
-  if ($mailbox = $provider->GetMailbox($info_store_server,$mailbox_alias_name,$org,$ou)) {
+  if ($mailbox = $provider->GetMailbox($mailbox_alias_name)) {
     print "Mailbox already existed\n";
     if ($mailbox->SetOwner("$domain\\$mailbox_alias_name")) {
       print "SetOwner in GetMailbox worked!\n";
@@ -66,7 +58,7 @@ if (!Win32::Exchange::GetLDAPPath($info_store_server,$org,$ou)) {
       exit 0;
     }
   } else {
-    $mailbox = $provider->CreateMailbox($info_store_server,$mailbox_alias_name,$org,$ou);
+    $mailbox = $provider->CreateMailbox($mailbox_alias_name);
     if (!$mailbox) {
       print "error creating mailbox\n";
       exit 0;
@@ -138,7 +130,7 @@ if (!Win32::Exchange::GetLDAPPath($info_store_server,$org,$ou)) {
 
   my @new_dl_members;
   push (@new_dl_members,$mailbox_alias_name);
-  $provider->AddDLMembers($info_store_server,"newdltest",\@new_dl_members); 
+  $provider->AddDLMembers($distribution_list,\@new_dl_members); 
 
 }
 
@@ -153,14 +145,12 @@ sub e60 {
     print "    storage groups = $counts[0]\n";
     print "    mailbox stores = $counts[1]\n";
   }
-  if ($mailbox = $provider->GetMailbox($pdc,$mailbox_alias_name)) {
+  if ($mailbox = $provider->GetMailbox($mailbox_alias_name)) {
     print "Got Mailbox successfully\n";
   } else {
     print "Mailbox did not exist\n";
-    if ($mailbox = $provider->CreateMailbox($info_store_server,
-                                            $pdc,
-                                            $mailbox_alias_name
-                                            )
+    if ($mailbox = $provider->CreateMailbox($mailbox_alias_name
+                                           )
        ) {
       print "Mailbox create succeeded.\n";
     } else {
@@ -216,4 +206,3 @@ sub e60 {
   exit 1;
         
 }
-

@@ -7,7 +7,7 @@
 <BODY>
 <TABLE BORDER=0 CELLPADDING=0 CELLSPACING=0 WIDTH=100%>
 <TR><TD CLASS=block VALIGN=MIDDLE WIDTH=100% BGCOLOR="#cccccc">
-<FONT SIZE=+1><STRONG><P CLASS=block>&nbsp;Win32::Exchange::Mailbox - Exchange 5.5 and Exchange 2000 mailbox maintenance functions</P></STRONG></FONT>
+<FONT SIZE=+1><STRONG><P CLASS=block>&nbsp;Win32::Exchange::Mailbox - Exchange 5.5, 2000 and 2003 mailbox maintenance functions</P></STRONG></FONT>
 </TD></TR>
 </TABLE>
 
@@ -34,7 +34,7 @@
             <LI><A HREF="#function_SetPerms">SetPerms</A></LI>
             <LI><A HREF="#function_SetOwner">SetOwner</A></LI>
           </UL>
-          <LI>Exchange 2000</LI>
+          <LI>Exchange 2000/2003</LI>
           <UL>
             <LI><A HREF="#function_new">new</A></LI>
             <LI><A HREF="#function_AddDLMembers">AddDLMembers</A></LI>
@@ -69,7 +69,7 @@
 <HR>
 <P>
 <H1><A NAME="name">NAME</A></H1>
-<P>Win32::Exchange::Mailbox - Exchange 5.5 and Exchange 2000 functions</P>
+<P>Win32::Exchange::Mailbox - Exchange 5.5, 2000 and 2003 functions</P>
 <P>
 <HR>
 <H1><A NAME="synopsis">SYNOPSIS</A></H1>
@@ -78,7 +78,7 @@
       die " - error creating new object\n';
 
   #--- Exchange 5.5
-  $mailbox = $provider->CreateMailbox($info_store_server,$mailbox_alias_name);
+  $mailbox = $provider->CreateMailbox($mailbox_alias_name);
   if (!$mailbox) {
     die "Error creating mailbox\n";
   }
@@ -87,10 +87,8 @@
   $mailbox->SetOwner("$domain\\$mailbox_alias_name");
   $mailbox->SetPerms(\@Perms);
 
-  #--- Exchange 2000
-  $mailbox = $provider->CreateMailbox($info_store_server,
-                                           $pdc,
-                                           $mailbox_alias_name) ||
+  #--- Exchange 2000/2003
+  $mailbox = $provider->CreateMailbox($mailbox_alias_name) ||
     print 'Mailbox create failed\n';
   $mailbox->Win32::Exchange::SetAttributes(\%Attributes) ||
         print 'Set Attributes failed\n';
@@ -99,7 +97,7 @@
 <P>
 <HR>
 <H1><A NAME="description">DESCRIPTION</A></H1>
-For now, this module creates and modifies Exchange 5.5 and 2000 mailboxes, has growing support
+For now, this module creates and modifies Exchange 5.5, 2000 and 2003* mailboxes, has growing support
 for distribution lists, and some server API queries. Eventually it will do more, but for now, that's it.
 Kind of vague..  isn't it?<BR>
 <BR>
@@ -114,43 +112,50 @@ and you need the Exchange 2000 client tools loaded on the box you want to do the
 correctly.  These are kind of modest requirements, but please check the NOTES section for more on software
 requirements and good ideas.<BR>
 <BR>
+A note on Exchange 2003:  Though it looks to be almost identical to Exchange 2000 in the various calls,
+not everything is tested (thoroughly).  That is to say that, I've created one mailbox on a 2003 server.
+Bug Reports are welcome.  Please recheck the docs first as the various functions have changed what parameters
+they expect as of build 042.<BR>
+<BR>
 All methods return 0 (or undef) on failure and 1 for success unless otherwise noted.<BR>
 <P>
 <H2><A NAME="functions">Functions</A></H2>
 <DL>
-<DT><STRONG><A NAME="function_new">$provider = Win32::Exchange-&gt;new($server_name | $version);</A></STRONG><BR>
+<DT><STRONG><A NAME="function_new">$provider = Win32::Exchange-&gt;new($server_name);</A></STRONG><BR>
 <DD>
 The <A HREF="#item_new"><CODE>new()</CODE></A> class method starts a new instance of an Exchange provider object.
 It returns a reference to this object or <B>undef</B> if the creation fails.<BR>
 <BR>
+It should be noted <STRONG>strongly</STRONG> that the parameters for just about every Mailbox function changed in release 042.
+Most of these changes are pulling out the exchange server name and/or DC name.  Sorry for the changes.<BR>
+This model is much better (cleaner code) and allows much more flexibility.<BR>
+It should also be noted that the provider object is now server specific as the provider object tells the various functions which
+domain controller to talk to (namely, the one that this exchange server is currently taking auth/AD requests from).<BR>
+<BR>
+This should be a noticable improvement.  Namely, waiting on replication in large environments could potentially break simple scripts
+while waiting on replication, and mailbox creation could be stalled while waiting on repl.  Now, the changes should take place on the same server
+(providing you code for AD user creates on the server that your exchange server is talking to. ($provider->{dc}).<BR>
+<BR>
 <UL>
-  <LI>You can send a server name or a version number</LI>
-  <LI>If used, $version must equal 5.5 or 6.0.</LI>
-  <UL>
-    <LI>5.5 would create a Win32::OLE object of type AdsNamespaces for use with Exchange 5.5</LI>
-    <LI>6.0 would create a Win32::OLE object of type CDO.Person for use with Exchange 2000</LI>
-  </UL>
-  <LI>If used, $server_name must NOT be prepended with backslashed</LI>
+  <LI>sending a version number is no longer supported.</LI>
+  <LI>$server_name must NOT be prepended with backslashes</LI>
 </UL>
 <BR>
 $provider = Win32::Exchange::Mailbox-&gt;new($server_name); #new performs a check on your exchange server for versioning<BR>
-$provider = Win32::Exchange::Mailbox-&gt;new($version); #creates an object suitable for a $version server.. ("5.5" or "6.0")<BR>
 <BR>
-<A HREF="../Exchange.html#function_GetVersion"><B>Win32::Exchange::GetVersion</B></A> can return an acceptable version number for your Exchange server.
 <P></P>
-<DT><STRONG><A NAME="function_AddDLMembers">$provider-&gt;<CODE>AddDLMembers($info_store_server,$dl_name,\@new_dl_members[,1]);#Exchange 5.5 sending an alias name</CODE></A></STRONG><BR>
-<DT><STRONG><A NAME="function_AddDLMembers">$provider-&gt;<CODE>AddDLMembers($info_store_server,$dl_dn,\@new_dl_members);#Exchange 5.5 sending a "distinguished name"</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function_AddDLMembers">$provider-&gt;<CODE>AddDLMembers($dl_name,\@new_dl_members[,1]);#Exchange 5.5 sending an alias name</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function_AddDLMembers">$provider-&gt;<CODE>AddDLMembers($dl_dn,\@new_dl_members);#Exchange 5.5 sending a "distinguished name"</CODE></A></STRONG><BR>
 <DT><STRONG><A NAME="function_AddDLMembers">$provider-&gt;<CODE>AddDLMembers($dl_name,\@new_dl_members);#Exchange 2000</CODE></A></STRONG><BR>
 <DD>
-The only noticable difference between Exchange 5.5 and 2000 for this call are the parameters sent to it, and the provider version that
-should be sent.  In either case, both functions check parameters and provider versions, so you shouldn't hit any snafus.<BR>
+The only noticable differences between Exchange 5.5 and 2000 for this call are where the data gets set, and provider version.
+In either case, both functions check parameters and provider versions, so you shouldn't hit any snafus.<BR>
 <BR>
 The Exchange 5.5 version now accepts either that "alias name" or the "distinguished name" of both the distribution list and the mailbox.
-As well, the module can search for both the DL and MB "distinguished name" if you choose not to send it (but send the ontional "1" signifying you want it to search).  If you send an alias name and do
-not choose to search for it, the module will expect that your alias is in the default container.
+As well, the module searches for both the DL and MB "distinguished name".<BR>
 <BR>
   #Exchange 5.5<BR>
-  if ($provider->AddDLMembers($info_store_server,$dl_name,/@new_dl_members),1) { #Search for $dl_name<BR>
+  if ($provider->AddDLMembers($dl_name,/@new_dl_members),1) { #Search for $dl_name<BR>
     print "Added members successfully\n";<BR>
   }<BR>
 <BR>
@@ -161,14 +166,13 @@ not choose to search for it, the module will expect that your alias is in the de
 <BR>
 <BR>
 <DT><STRONG><A NAME="function_CreateMailbox"></A></STRONG><BR>
-<DT><STRONG><A NAME="function__E55CreateMailbox">$provider-&gt;<CODE>CreateMailbox($server_name,$mailbox_name,[$org,$ou]);#Exchange 5.5</CODE></A></STRONG><BR>
-<DT><STRONG><A NAME="function__E55CreateMailbox">$provider-&gt;<CODE>CreateMailbox($server_name,$mailbox_name,[$container]);#Exchange 5.5 using a specific container</CODE></A></STRONG><BR>
-<DT><STRONG><A NAME="function__E2kCreateMailbox">$provider-&gt;<CODE>CreateMailbox($server_name,$dc_name,$mailbox_name,[$storage_group,$mailbox_store]);#Exchange 2000</CODE></A></STRONG><BR>
-<DT><STRONG><A NAME="function__E2kCreateMailbox">$provider-&gt;<CODE>CreateMailbox($server_name,$dc_name,$mailbox_name,[$mailbox_store_dn]);#Exchange 2000 using dn</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function__E55CreateMailbox">$provider-&gt;<CODE>CreateMailbox($mailbox_name,[$container]);#Exchange 5.5 using a specific container</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function__E2kCreateMailbox">$provider-&gt;<CODE>CreateMailbox($mailbox_name,[$storage_group,$mailbox_store]);#Exchange 2000</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function__E2kCreateMailbox">$provider-&gt;<CODE>CreateMailbox($mailbox_name,[$mailbox_store_dn]);#Exchange 2000 using dn</CODE></A></STRONG><BR>
 <DD>
 The <A HREF="#function_CreateMailbox"><CODE>CreateMailbox()</CODE></A> function behaves differently depending on
-which type of provider it is passed (CDO.Person [E2K] or ADsNamespaces[5.5]).  As well, the arguments for the Exchange
-5.5 and 2000 functions are different.<BR>
+which type of version of the provider it is passed.  As well, the arguments for the Exchange 5.5 and 2000 functions can be
+slightly different.<BR>
 <BR>
 When making Exchange 2000 Mailboxes, it should be noted that if you are using multiple "storage groups",
 or multiple "mailbox stores" on the Exchange Server, the presence of $storage_group and $mailbox_store are not optional (unless replaced by a valid mailbox store distinguished name as the fifth parameter),
@@ -178,7 +182,7 @@ Lastly, if you plan on running <STRONG><A NAME="../Exchange.html#function_Locate
 the CreateMailbox, you can pass the distinguished name of the "located" mailbox store instead of the "storage group"
 and "mailbox store" names.<BR>
 <BR>
-For the Exchange 5.5 call, you can optionally pass a container name, something like this...<BR>
+For the Exchange 5.5 call, you can optionally pass a container name, something like this... (similarly, a dn can be passed for Exchange 2000)<BR>
 $container = "CN=Talahassee,CN=Recipients,OU=Corporate,O=MegaCompany";<BR>
 <BR>
 If you don't specify a container, Win32::Exchange::Mailbox will try to create your mailbox in the default (my default) container of:<BR>
@@ -187,7 +191,7 @@ If you don't specify a container, Win32::Exchange::Mailbox will try to create yo
 <BR>
 <DT><STRONG><A NAME="function_DeleteMailbox"></A></STRONG><BR>
 <DT><STRONG><A NAME="function__E2KDeleteMailbox">$mailbox-&gt;<CODE>DeleteMailbox();#E2K</CODE></A></STRONG><BR>
-<DT><STRONG><A NAME="function__E2KDeleteMailbox">$provider-&gt;<CODE>DeleteMailbox($exchange_server,$mailbox_name,);#E55</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function__E2KDeleteMailbox">$provider-&gt;<CODE>DeleteMailbox($mailbox_name,);#E55</CODE></A></STRONG><BR>
 <DD>
 The <A HREF="#function_DeleteMailbox"><CODE>DeleteMailbox()</CODE></A> function is implemented for Exchange 5.5 and 2000.<BR>
 <BR>
@@ -197,7 +201,7 @@ The base object that this function uses for Exchange 2000 is the mailbox object 
 <BR>
 $provider = Win32::Exchange::Mailbox->new($exch_server);<BR>
 sub e2k {
-  $mailbox = $provider->GetMailbox($exch_server,"thisisatest");<BR>
+  $mailbox = $provider->GetMailbox("thisisatest");<BR>
   if ($mailbox) {<BR>
     print "Got Mailbox\n";<BR>
   } else {<BR>
@@ -212,7 +216,7 @@ sub e2k {
 }<BR>
 <BR>
 sub e55 {<BR>
-  if ($provider->DeleteMailbox($exch_server,$mailbox_alias)) {<BR>
+  if ($provider->DeleteMailbox($mailbox_alias)) {<BR>
     print "Mailbox deletion successful.\n";<BR>
   } else {<BR>
     print "Mailbox deletion failed.\n";<BR>
@@ -221,18 +225,12 @@ sub e55 {<BR>
 <BR>
 <BR>
 
-
-
-<DT><STRONG><A NAME="function_GetDLMembers">$provider-&gt;<CODE>GetDLMembers($info_store_server,$dl_name,\@new_dl_members,$prop,$org,$ou);#Exchange 5.5 sending org and ou</CODE></A></STRONG><BR>
-<DT><STRONG><A NAME="function_GetDLMembers_E55">$provider-&gt;<CODE>GetDLMembers($info_store_server,$dl_name,\@new_dl_members[,$prop_name]);#Exchange 5.5 not sending org and ou</CODE></A></STRONG><BR>
-<DT><STRONG><A NAME="function_GetDLMembers_E2K">$provider-&gt;<CODE>GetDLMembers($dl_name,\@new_dl_members[,$prop]);#Exchange 2000</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function_GetDLMembers"></A></STRONG>
+<DT><STRONG><A NAME="function_GetDLMembers_E55"></A></STRONG>
+<DT><STRONG><A NAME="function_GetDLMembers_E2K">$provider-&gt;<CODE>GetDLMembers($dl_name,\@new_dl_members[,$prop_name]);</CODE></A></STRONG><BR>
 <DD>
-The only noticable difference between Exchange 5.5 and 2000 for this call are the parameters sent to it, and the provider version that
-should be sent.  In either case, both functions check parameters and provider versions, so you shouldn't run into any problems.<BR>
-<BR>
-If you do not send a $prop, the returning array will be the "distinguidhedname" of the member(s) in the Distribution List.  Use an LDAP viewer
-to view the available properties of your Exchange object.  Note: that in the Exchange 5.5 version, if you want to send ORG and OU, you have
-to send $prop.<BR>
+If you do not send a $prop_name, the returning array will be the "distinguidhedname" of the member(s) in the Distribution List.  Use an LDAP viewer
+to view the available properties of your Exchange object.
 <BR>
 If there are no members in your distribution list, Your array will be empty.  This is different than the function returning 0, because the function
 worked, but the group/distribution list was empty (no members).<BR>
@@ -242,15 +240,15 @@ The Exchange 5.5 version hasn't been fully tested.  Sorry.  I don't have an Exch
 
   <BR>
   $prop = "displayname";#change this to see different values for your members<BR>
-  $provider = Win32::Exchange::Mailbox->new($ver);<BR>
-  if ($ver eq "5.5") {<BR>
+  $provider = Win32::Exchange::Mailbox->new($server_name);<BR>
+  if ($provider->{ver} eq "5.5") {<BR>
     #Exchange 5.5<BR>
-    if ($provider->GetDLMembers("servername","distlistname",\@members,$prop)) {<BR>
+    if ($provider->GetDLMembers("distlistname",\@members,$prop)) {<BR>
       print "worked -- E55\n";<BR>
     } else {<BR>
       print "didn't work -- E55\n";<BR>
     }<BR>
-  } elsif ($ver eq "6.0") {<BR>
+  } elsif ($provider->{ver} eq "6.0") {<BR>
     #Exchange 2000<BR>
     if ($provider->GetDLMembers("distlistname",\@members,$prop)) {<BR>
       print "worked - E2K\n";<BR>
@@ -265,38 +263,18 @@ The Exchange 5.5 version hasn't been fully tested.  Sorry.  I don't have an Exch
 <BR>
 <BR>
 
-<DT><STRONG><A NAME="function_GetMailbox"></A></STRONG><BR>
-<DT><STRONG><A NAME="function__E55GetMailbox">$provider-&gt;<CODE>GetMailbox($server_name,$mailbox_name,[$org,$ou]);</CODE></A></STRONG><BR>
-<DT><STRONG><A NAME="function__E55GetMailbox">$provider-&gt;<CODE>GetMailbox($server_name,$mailbox_name,[1]);#Exchange 5.5</CODE></A></STRONG><BR>
-<DT><STRONG><A NAME="function__E2KGetMailbox">$provider-&gt;<CODE>GetMailbox($dc_name,$mailbox_name);#Exchange 2K</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function_GetMailbox"></A></STRONG>
+<DT><STRONG><A NAME="function__E55GetMailbox"></A></STRONG>
+<DT><STRONG><A NAME="function__E2KGetMailbox">$provider-&gt;<CODE>GetMailbox($mailbox_name);</CODE></A></STRONG><BR>
 <DD>
-The <A HREF="#function_GetMailbox"><CODE>GetMailbox()</CODE></A> function is implemented for Exchange 5.5 and 2000.<BR>
+The <A HREF="#function_GetMailbox"><CODE>GetMailbox()</CODE></A> function is implemented for Exchange 5.5 and 2000.
+There is no more need to send the Org or OU<BR>
 <BR>
-The base object that is returned for Exchange 2000 mailboxes is the LDAP user object, and the object that is returned for Exchange 5.5 is
-the 5.5 mailbox object.<BR>
-<BR>
-Optionally, you can tell the function to search for your object if it does not reside in the default container (cn=Recipients,ou=yourOU,o=YourO),
-or send it the "distinguished name" of your object (useful in Exchange 5.5 only).<BR>
-<BR>
-  $mailbox = $provider->GetMailbox($info_store_server,$mailbox_alias_name,$org,$ou);<BR>
+  #E2K or E55<BR>
+  $mailbox = $provider->GetMailbox($mailbox_alias_name);<BR>
   if ($mailbox) {<BR>
     print "Mailbox exists\n";<BR>
   }<BR>
-<BR>
-- OR - when you want to search for the mailbox... (Exchange 5.5 only)<BR>
-<BR>
-  $mailbox = $provider->GetMailbox($info_store_server,$mailbox_alias_name,1);<BR>
-  if ($mailbox) {<BR>
-    print "Mailbox exists\n";<BR>
-  }<BR>
-<BR>
-Exchange 2000<BR>
-<BR>
-$mailbox = $provider->GetMailbox($domain_controller,$mailbox_alias_name);<BR>
-if ($mailbox) {<BR>
-  print "Mailbox exists\n";<BR>
-}<BR>
-<BR>
 <BR>
 <DT><STRONG><A NAME="function_GetOwner">$mailbox-&gt;GetOwner($nt_user,[$sid_type]);#Exchange 5.5</A></STRONG><BR>
 <DD>
@@ -305,31 +283,32 @@ The <A HREF="#function_GetOwner"><CODE>GetOwner()</CODE></A> method takes an Exc
 along with a variable to store the results in, and an optional "SID type", in order for the function to return a string type of
 your choosing.<BR>
 <BR>
-This function defaults to ADS_SID_WINNT_PATH if no sid_type is specified.  I don't believe there is an E2K equivelant.<BR>
+This function defaults to ADS_SID_WINNT_PATH if no sid_type is specified.  I don't believe there is an E2K equivelant due to the nature of E2K integration with AD.<BR>
 <BR>
 $mailbox->GetOwner($nt_user,0x2) || print 'Error getting owner\n'; #0x2 == ADS_SID_SAM<BR>
 <BR>
 <BR>
 <A NAME="function_MailDisable">
-<DT><STRONG><A NAME="function_E2KMailDisable">$provider-&gt;<CODE>MailDisable($user_obj);#E2K only (for now)</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function_E2KMailDisable">$provider-&gt;<CODE>MailDisable();#E2K only (for now)</CODE></A></STRONG><BR>
 <DD>
 This method allows you mail-disable an AD user account.
 <BR>
-The provider is an object that was created with Win32::Exchange::Mailbox->new.  The $user_obj is an object created by the GetUserObject method.<BR>
+You must call GetUserObject method before trying to MailDisable an account.<BR>
 <BR>
-if ($provider->MailDisable($user_obj) {<BR>
+$provider = Win32::Exchange->new($exch_server_name);<BR>
+$user_object = $provider->GetUserObject("username");<BR>
+if ($user_object->MailDisable() {<BR>
   print "Success!";<BR>
 }<BR>
 <BR>
 <BR>
-<DT><STRONG><A NAME="function__GetUserObject">$provider-&gt;<CODE>GetUserObject($dc_name,$mailbox_name);#Exchange 2K</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function__GetUserObject">$user_object = $provider-&gt;<CODE>GetUserObject($mailbox_name);#Exchange 2K</CODE></A></STRONG><BR>
 <DD>
 The <A HREF="#function_GetUserObject"><CODE>GetUserObject()</CODE></A> function is intended for use only with Exchange 2000 and (currently),
 <A HREF="#function_MailEnable">MailEnable</A> and <A HREF="#function_MailDisable">MailDisable</A>.<BR>
 <BR>
-The base object that is returned for this method is the LDAP user object.<BR>
-<BR>
-$user_obj = $provider->GetUserObject($domain_controller,$mailbox_alias_name);<BR>
+$provider = Win32::Exchange->new($exch_server_name);<BR>
+$user_obj = $provider->GetUserObject($mailbox_alias_name);<BR>
 if ($user_obj) {<BR>
   print "user exists\nLet's go create them a mailenabled address!\n";<BR>
   if ($provider->MailEnable($user_obj,'someone@somewhere_else.org')) {<BR>
@@ -342,6 +321,7 @@ if ($user_obj) {<BR>
 <DT><STRONG><A NAME="function_IsMailEnabled">$provider-&gt;<CODE>IsMailboxEnabled($dc,$aliasname);#E2K only (for now)</CODE></A></STRONG><BR>
 <DT><STRONG><A NAME="function_IsMailboxEnabled">$provider-&gt;<CODE>IsMailboxEnabled($dc,$aliasname);#E2K only (for now)</CODE></A></STRONG><BR>
 <DD>
+Note: More testing needs to be done with these functions because they might not work as expected in Native-Mode Exchange (E2K/E2K03) organizations
 These 3 functions were designed in determining quickly whether or not an AD user object:<BR>
 <BR>
 --was addressable via email.  I.E. it is either MailEnabled or has a mailbox (IsMapiAware)<BR>
@@ -350,27 +330,28 @@ These 3 functions were designed in determining quickly whether or not an AD user
 <BR>
 These functions all return 1 for yes, and 0 for no.<BR>
 <BR>
-if ($provider->IsMailEnabled($dc,$mailbox_name)) {<BR>
+if ($provider->IsMailEnabled($mailbox_name)) {<BR>
   print "This username is mailable, but does not currently have a mailbox at this address\n";<BR>
 }<BR>
-if ($provider->IsMailboxEnabled($dc,$mailbox_name)) {<BR>
+if ($provider->IsMailboxEnabled($mailbox_name)) {<BR>
   print "This username is mailable, and currently has a mailbox at this address\n";<BR>
 }<BR>
-if ($provider->IsMapiAware($dc,$mailbox_name)) {<BR>
+if ($provider->IsMapiAware($mailbox_name)) {<BR>
   print "This username is mailable, either by a mail-enabled address or Mailbox\n";<BR>
 }<BR>
 <BR>
 <BR>
 
 <A NAME="function_MailEnable">
-<DT><STRONG><A NAME="function_E2KMailEnable">$provider-&gt;<CODE>MailEnable($user_obj,[$address]);#E2K only (for now)</CODE></A></STRONG><BR>
+<DT><STRONG><A NAME="function_E2KMailEnable">$provider-&gt;<CODE>MailEnable([$address]);#E2K only (for now)</CODE></A></STRONG><BR>
 <DD>
 This method allows you mail-enable an AD user account.  Optionally, you can set the address to send mail for the user if it
 was to be redirected to an off-site account (perhaps, the user's hotmail.com, juno.com, or yahoo.com mail account).<BR>
 <BR>
 The provider is an object that was created with Win32::Exchange::Mailbox->new.  The $user_obj is an object created by the GetUserObject method.<BR>
 <BR>
-if ($provider->MailEnable($user_obj,"pcgeek@bigfoot.com") {<BR>
+$user_obj = $provider->GetUserObject($username);<BR>
+if ($user_obj->MailEnable("pcgeek@bigfoot.com") {<BR>
   print "Success!";<BR>
 }<BR>
 <BR>
@@ -452,7 +433,6 @@ use Win32::Exchange;
 
 $domain = Win32::DomainName();
 $info_store_server="YOURMAILBOXSERVERNAME";
-$pdc = Win32::Exchange::FindCloseDC($info_store_server);
 $mta_server=$info_store_server; # this could be different, but for testing, we'll set them the same
 
 #  start E2K only
@@ -478,10 +458,11 @@ if (!Win32::Exchange::GetVersion($info_store_server,\%ver) ) {
 print "version      = $ver{ver}\n";
 print "build        = $ver{build}\n";
 print "service pack = $ver{sp}\n";
-if (!($provider = Win32::Exchange::Mailbox->new($ver{'ver'}))) {
+if (!($provider = Win32::Exchange::Mailbox->new($info_store_server))) {
   print "$rtn - Error returning into main from new ($Win32::Exchange::VERSION)\n";
   exit 0;
 }
+$dc = $provider->{dc};
 
 my @PermsUsers;
 push (@PermsUsers,"$domain\\$mailbox_alias_name");
@@ -498,13 +479,7 @@ if ($ver{ver} eq "5.5") {
 
 sub e55 {
 
-if (!Win32::Exchange::GetLDAPPath($info_store_server,$org,$ou)) {
-    print "Error returning into main from GetLDAPPath\n";
-    exit 0;
-  }
-  print "GetLDAPPath succeeded\n";
-
-  if ($mailbox = $provider->GetMailbox($info_store_server,$mailbox_alias_name,$org,$ou)) {
+  if ($mailbox = $provider->GetMailbox($mailbox_alias_name)) {
     print "Mailbox already existed\n";
     if ($mailbox->SetOwner("$domain\\$mailbox_alias_name")) {
       print "SetOwner in GetMailbox worked!\n";
@@ -516,7 +491,7 @@ if (!Win32::Exchange::GetLDAPPath($info_store_server,$org,$ou)) {
       exit 0;
     }
   } else {
-    $mailbox = $provider->CreateMailbox($info_store_server,$mailbox_alias_name,$org,$ou);
+    $mailbox = $provider->CreateMailbox($mailbox_alias_name);
     if (!$mailbox) {
       print "error creating mailbox\n";
       exit 0;
@@ -588,7 +563,7 @@ if (!Win32::Exchange::GetLDAPPath($info_store_server,$org,$ou)) {
 
   my @new_dl_members;
   push (@new_dl_members,$mailbox_alias_name);
-  $provider->AddDLMembers($info_store_server,"newdltest",\@new_dl_members);
+  $provider->AddDLMembers("newdltest",\@new_dl_members);
 
 }
 
@@ -603,13 +578,11 @@ sub e60 {
     print "    storage groups = $counts[0]\n";
     print "    mailbox stores = $counts[1]\n";
   }
-  if ($mailbox = $provider->GetMailbox($pdc,$mailbox_alias_name)) {
+  if ($mailbox = $provider->GetMailbox($mailbox_alias_name)) {
     print "Got Mailbox successfully\n";
   } else {
     print "Mailbox did not exist\n";
-    if ($mailbox = $provider->CreateMailbox($info_store_server,
-                                            $pdc,
-                                            $mailbox_alias_name,
+    if ($mailbox = $provider->CreateMailbox($mailbox_alias_name,
                                             $email_domain
                                             )
        ) {
@@ -753,7 +726,7 @@ I'd like to extend thanks to the following:<BR>
 <P>Please send questions, comments or suggestions about this module to Steven Manross &lt;<A HREF="mailto:steven@manross.net">steven@manross.net</A>&gt.</P>
 <HR>
 <H1><A NAME="version">VERSION</A></H1>
-<P>Version 0.041     August 5, 2003</P>
+<P>Version 0.042     November 11, 2003</P>
 <H1><A NAME="copyright">Copyright</A></H1>
 Microsoft, Active Directory, ADSI, Windows, Windows NT, MSDN, and Exchange are either registered trademarks or trademarks of Microsoft Corporation in the United States and/or other countries.<BR>
 <BR>

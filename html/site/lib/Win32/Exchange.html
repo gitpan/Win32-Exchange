@@ -7,7 +7,7 @@
 <BODY>
 <TABLE BORDER=0 CELLPADDING=0 CELLSPACING=0 WIDTH=100%>
 <TR><TD CLASS=block VALIGN=MIDDLE WIDTH=100% BGCOLOR="#cccccc">
-<FONT SIZE=+1><STRONG><P CLASS=block>&nbsp;Win32::Exchange - Exchange 5.5 and Exchange 2000 functions</P></STRONG></FONT>
+<FONT SIZE=+1><STRONG><P CLASS=block>&nbsp;Win32::Exchange - Exchange 5.5, 2000 and 2003 functions</P></STRONG></FONT>
 </TD></TR>
 </TABLE>
 
@@ -29,12 +29,13 @@
             <LI><A HREF="#function_GetLDAPPath">GetLDAPPath</A></LI>
             <LI><A HREF="#function_GetVersion">GetVersion</A></LI>
           </UL>
-          <LI>Exchange 2000</LI>
+          <LI>Exchange 2000/2003</LI>
           <UL>
             <LI><A HREF="#function_new">new</A></LI>
             <LI><A HREF="#function_FindCloseDC">FindCloseDC</A></LI>
             <LI><A HREF="#function_GetDistinguishedName">GetDistinguishedName</A></LI>
             <LI><A HREF="#function_GetVersion">GetVersion</A></LI>
+            <LI><A HREF="#function_IsMixedModeExchangeOrg">IsMixedModeExchangeOrg</A></LI>
             <LI><A HREF="#function_LocateMailboxStore">LocateMailboxStore</A></LI>
           </UL>
         </UL>
@@ -56,7 +57,7 @@
 <HR>
 <P>
 <H1><A NAME="name">NAME</A></H1>
-<P>Win32::Exchange - Exchange 5.5 and Exchange 2000 functions</P>
+<P>Win32::Exchange - Exchange 5.5, 2000 and 2003 functions</P>
 <P>
 <HR>
 <H1><A NAME="synopsis">SYNOPSIS</A></H1>
@@ -65,7 +66,7 @@
       die " - error creating new object\n';
 
   #--- Exchange 5.5
-  $mailbox = $provider->CreateMailbox($info_store_server,$mailbox_alias_name);
+  $mailbox = $provider->CreateMailbox($mailbox_alias_name);
   if (!$mailbox) {
     die "Error creating mailbox\n";
   }
@@ -75,10 +76,8 @@
   $mailbox->SetPerms(\@Perms);
 
   #--- Exchange 2000
-  $mailbox = $provider->CreateMailbox($info_store_server,
-                                           $pdc,
-                                           $mailbox_alias_name,
-                                           "domainname.com") ||
+  $mailbox = $provider->CreateMailbox($mailbox_alias_name,
+                                      "domainname.com") ||
     print 'Mailbox create failed\n';
   $mailbox->Win32::Exchange::SetAttributes(\%Attributes) ||
         print 'Set Attributes failed\n';
@@ -211,6 +210,21 @@ This function returns a HASH of version information in the form of:<BR>
   print "service pack = $ver{sp}\n";<BR>
 <BR>
 <P></P>
+<DT><STRONG><A NAME="function_IsMixedModeExchangeOrg">Win32::Exchange::IsMixedModeExchangeOrg($yes_no);</A></STRONG><BR>
+<DD>
+This function returns 1 (true) on Success and 0 (false) on error.<BR>
+<BR>
+
+if (!Win32::Exchange::IsMixedModeExchangeOrg($yes_no)) {<BR>
+  die "$rtn - Error determining Sstatus of Exchange Organization\n";<BR>
+}<BR>
+<BR>
+if ($yes_no eq "1") {<BR>
+  print "This is a Mixed Mode Exchange Organization\n";<BR>
+} else {<BR>
+  print "This is a Native Mode Exchange organization.  There's no Exchange 5.5 here!\n";<BR>
+}<BR>
+<BR>
 <DT><STRONG><A NAME="function_LocateMailboxStore">Win32::Exchange::<CODE>LocateMailboxStore($info_store_server,$storage_group,$mailbox_store,$store_name,[\@counts]);</CODE></A></STRONG><BR>
 <DD>
 This method allows you to query the Exchange 2000 server to determine:<BR>

@@ -30,9 +30,8 @@ Win32::OLE->Option('_Unique' => 1);
 #@ISA = qw(Win32::OLE);
 
 my $Version;
-my $VERSION = $Version = "0.040";
+my $VERSION = $Version = "0.041";
 my $DEBUG = 2;
-
 
 sub new {
   my $server;
@@ -187,11 +186,16 @@ sub GetVersion {
   }
   $Win32::OLE::Warn = $original_ole_warn_value; 
 
-  if ($serial_val =~ /Version (.*) \(Build (.*): Service Pack (.*)\)/i) {
+  if ($serial_val =~ /Version (.*) \(Build (.{6})?(.*)\)/i) {
     my %return_struct;
     $return_struct{ver}= $1;
     $return_struct{build}= $2;
     $return_struct{sp}= $3;
+    if ($return_struct{sp} =~ /service pack (.)/i) {
+      $return_struct{sp} = $1;
+    } else {
+      $return_struct{sp}= "0";
+    }
     if ($return_struct{sp} < 2 && $return_struct{ver} eq "6.0") {
       _DebugComment("It's possible that some of the E2K permissions functions will fail due to an incompatible E2K Service Pack level (please see the HTML docs for details)\n",2)
     }
@@ -275,9 +279,17 @@ sub _E2kVersionInfo {
   #example output:
   #Version 5.5 (Build 2653.23: Service Pack 4)
   #Version 6.0 (Build 6249.4: Service Pack 3)
+  #Version 6.5 (Build 6944.4)
  
   if ($exchange_server->{ExchangeVersion} ne "") {
-    $_[1] = $exchange_server->{ExchangeVersion};
+    if (ref($_[1]) eq "HASH") {
+      my %verhash;
+      $verhash{'ver'} = $exchange_server->{ExchangeVersion};
+      $verhash{'dc'} = $exchange_server->{DirectoryServer};
+      %{$_[1]} = %verhash;
+    } else {
+      $_[1] = $exchange_server->{ExchangeVersion};
+    }
     return 1;
   } else {
     _DebugComment("Failed failed to produce valid version info for $server_name\n",1);
@@ -376,7 +388,7 @@ sub _AdodbExtendedSearch {
         }
       }
     } else {
-      _DebugComment("found: ".($RS->Fields($cols[1])->value)[0]."\n  -->".($RS->Fields($cols[0])->value)[0]."\n  -->$search_string\n",4);
+      _DebugComment("found: $cols[0] -- ".($RS->Fields($cols[0])->value)[0]."\n  $cols[0] -- ".($RS->Fields($cols[1])->value)[0]."\n  -->$search_string\n",4);
       if (lc($search_string) eq lc($RS->Fields($cols[0])->value)) {
         if (ref($RS->Fields($cols[1])->value) eq "ARRAY") {
           _DebugComment("found (not fuzzy) (ARRAY)".$RS->Fields($cols[1])->value."\n",3);
@@ -548,7 +560,7 @@ sub _TraverseStorageGroups {
     } elsif ($sg eq $storage_group && $storage_group ne "") {
       foreach $mb (keys %{$storage_groups{$sg}}) {
         if (scalar(keys %{$storage_groups{$sg}}) == 1 || $mb eq $mb_store && $mb_store ne "") {
-          $_[4] = "LDAP://$info_store_server/".$storage_groups{$sg}{$mb}; 
+          $_[4] = "LDAP://".$storage_groups{$sg}{$mb}; 
           return 1;
         } else {
           next;
@@ -622,16 +634,17 @@ sub FindCloseDC {
   my $error_num;
   my $WMI = Win32::OLE->new('WbemScripting.SWbemLocator');
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    print "Error creating new object\n";
+    _DebugComment("Error creating new WMI object (FindCloseDC)\n",1);
     return 0;
   } else {
     my $Service = $WMI->ConnectServer($host,"root\\microsoftexchangev2");
     if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
+      _DebugComment("Error connecting to the exchange WMI root node (FindCloseDC)\n",1);
       return 0;
     }
     my $listDCs = $Service->InstancesOf("Exchange_DSAccessDC");
     if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-      print "Error from errorcheck3\n";
+      _DebugComment("Error using InstancesOf in WMI object (FindCloseDC)\n",2);
       return 0;
     }
     my $dc = "";
@@ -677,6 +690,39 @@ sub FindCloseDC {
       return 0;
     }
   }
+}
+
+sub IsMixedModeExchangeOrg {
+  my $error_num;
+  my $error_name;
+  my $ldap_provider = Win32::OLE->new("ADsNamespaces");
+  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error creating RootDSE object for Native/Mixed Mode determination\n",1);
+    return 0;
+  }
+  my $rootdse = $ldap_provider->GetObject("","LDAP://RootDSE");
+  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error creating RootDSE object for Native/Mixed Mode determination\n",1);
+    return 0;
+  }
+  my $result;
+  my $cnc = $rootdse->Get("configurationNamingContext");
+  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error getting ConfigurationNamingContext property for Native/Mixed Mode determination\n",1);
+    return 0;
+  }
+ 
+  if (!Win32::Exchange::_AdodbExtendedSearch("Microsoft Exchange","LDAP://$cnc","(objectCategory=CN=ms-Exch-Organization-Container,CN=Schema,CN=Configuration,DC=manross,DC=net)","cn,DistinguishedName",2,$result)) {
+    _DebugComment("Error performing ADODB search for Native/Mixed Mode determination\n",1);
+    return 0;
+  }
+  my $org = $ldap_provider->GetObject("","LDAP://$result");
+  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error performing GetObject for Native/Mixed Mode determination\n",1);
+    return 0;
+  }
+  $_[0] = $org->{"msExchMixedMode"};
+  return 1;
 }
 
 sub ErrorCheck {

@@ -1,5 +1,27 @@
 Version History
 ------------------------
+2003/11/11 -     0.042   -Major rewrite of Exchange.pm and Mailbox.pm.  Changed a lot of functions to a new style (more stream-lined process) in Mailbox.pm.
+                         -major changed include:
+                             -Possible fix when User created in the same running as this script (avoids replication latency)..
+                               -This will require some of work from the user though.
+                                Namely, I now (think I) know what DC an Exchange 2000/2003 server is requesting authentication from, and this will require
+                                  that this script create the user on this DC.
+                                This fixes the "Replication Latency" issue becuase the change is local/immediate (on the same DC) as opposed to
+                                  remote/replicated (on different DCs).
+                             -major revamp of the $provider object for inclusion of version information and the above noted authenticating DC info.
+                                --this caused me to have to "touch" just about every sub and rewrite them so they play nicely with
+                                  the new provider object.  So, please let those bugfixes pour in.
+                                --Thanks go to Matt Sanford (and Win32::InternetExplorer::Window) for this usage for use in Win32::Exchange.
+                             -changed _E2KVersionInfo to return more information if a hash was passed (DC, and ver) in Exchange.pm
+                         -Changed the regex for GetVersion to include un service-packed servers..  like E2K03 currently is.
+                         -added GetMailboxContainer back in -- seems it was lost for over a year and no one complained (E55) in Mailbox.pm.  WOW.
+                         -changed the Main subs to correctly send E2K/E2K03 (version 6.0 and 6.5) requests to the E2K routine
+                         -added IsMixedModeExchangeOrg (tells you if you are a mixed or native Exchange org (whether or not you support E55).
+                            --Win32::Exchange ver 0.041
+                            --Win32::Exchange::Mailbox ver 0.042
+                            --Win32::Exchange::Const
+                            --Win32::Exchange::SMTP::Security ver 0.003
+
 2003/11/05 -     0.041   -bugfix for for CreateMailbox when Exchange Server is not a DC also. (Bad, Steven...)  Thanks to Peter Peterson and William Jothimuthu for reporting this bug.
 2003/10/18 -     0.040b  -minor bugfixes, readded GetPerms sub..  oops.
 2003/08/05 -     0.040a  -minor bugfixes IsMapiAware,
