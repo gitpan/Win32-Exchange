@@ -12,8 +12,8 @@ $domain = Win32::DomainName();
 $pdc = Win32::AdminMisc::GetPDC($domain);
 $mailbox_alias_name='thisisatest';
 $mailbox_full_name="This $mailbox_alias_name Isatest";
-$info_store_server="MAILBOXSERVER";
-$mta_server="MTASERVER";
+$info_store_server="HOMEEXCH2";
+$mta_server=$info_store_server; #this could be different, but for testing, we'll set them the same
 
 if (!Win32::Exchange::GetVersion($info_store_server,\%ver) ) {
   die "$rtn - Error returning into main from GetVersion\n";
@@ -62,15 +62,6 @@ if ($ver{ver} eq "5.5") {
   #be careful with 'otherMailbox'es..  You are deleting any addresses that may exist already
   #if you set them via 'otherMailbox' and don't get them first (you are now forewarned).
   $Exchange_Info{'otherMailbox'}=$Other_MBX;
-
-  $mailbox->SetAttributes(\%Exchange_Info);
-  $mailbox->SetOwner("$domain\\$mailbox_alias_name");
-
-  my @PermsUsers;
-  push (@PermsUsers,"$domain\\$mailbox_alias_name");
-  push (@PermsUsers,"$domain\\Exchange Perm Users"); #Group that needs perms to the mailbox...
-
-  $mailbox->SetPerms(\@PermsUsers);
   if (!Win32::Exchange::GetDistinguishedName($info_store_server,"Home-MTA",$Exchange_Info{"Home-MTA"})) {
     print "Failed getting distinguished name for Home-MTA on $info_store_server\n";
     return 0;
@@ -79,13 +70,26 @@ if ($ver{ver} eq "5.5") {
     print "Failed getting distinguished name for Home-MDB on $info_store_server\n";
     return 0;
   }
-  #undef the new_mailbox so we can test GetMailbox
-  undef ($new_mailbox);
+
+  $mailbox->SetAttributes(\%Exchange_Info);
+  $mailbox->SetOwner("$domain\\$mailbox_alias_name");
+
+  my @PermsUsers;
+  push (@PermsUsers,"$domain\\$mailbox_alias_name");
+  push (@PermsUsers,"$domain\\Exchange Perm Users"); #Group that needs perms to the mailbox...
+
+  if ($mailbox->SetPerms(\@PermsUsers)) {
+    print "Successfully set perms\n";  
+  } else {
+    die "Error setting perms\n";  
+  }
+
   my @new_dl_members;
   push (@new_dl_members,$mailbox_alias_name);
   $provider->AddDLMembers($info_store_server,"newdltest",\@new_dl_members); 
+
 } elsif ($ver{ver} eq "6.0") {
-  $info_store_server="HOMEEXCH2";
+
   $storage_group = ""; #you'd need to define this if you had more than 1 storage group on 1 server.
   $mailbox_store = ""; #you'd need to define this if you had more than 1 mailbox store on 1 or more storage groups.
   if (Win32::Exchange::LocateMailboxStore($info_store_server,$storage_group,$mailbox_store,$store_name,\@counts)) {
@@ -113,17 +117,32 @@ if ($ver{ver} eq "5.5") {
   push (@$proxies,'smtp:secondary@manross.net');
   push (@$proxies,'smtp:primary@manross.net');
   push (@$proxies,'smtp:tertiary@manross.net');
+
   $Attributes{"IMailRecipient"}{ProxyAddresses} = $proxies;
+  
+  #  $Attributes{"ExchangeInterfaceName"}{Property} = value; #with this method you should be able to set any value
+  #                                                           imaginable.....
+
   $Attributes{"IMailRecipient"}{IncomingLimit} = 6000;
   $Attributes{"IMailRecipient"}{OutgoingLimit} = 6000;
   $Attributes{"IMailboxStore"}{EnableStoreDefaults} = 0;
   $Attributes{"IMailboxStore"}{StoreQuota} = 100; #at 100KB starts getting warnings
   $Attributes{"IMailboxStore"}{OverQuotaLimit} = 120; #at 120KB can't send...  I THINK...
   $Attributes{"IMailboxStore"}{HardLimit} = 130; #at 130KB, can't do anything...  I THINK...
-  if (!$new_mailbox_user->Win32::Exchange::SetAttributes(\%Attributes)) {
+  if (!$new_mailbox_user->SetAttributes(\%Attributes)) {
     die "Error setting 2K Attributes\n";
   } else {
     print "Set Attributes correctly\n";
+  }
+
+  my @PermUsers;
+  push (@PermUsers,"$domain\\$mailbox_alias_name");
+  push (@PermUsers,"$domain\\Exchange Perms Admin"); #Group that needs perms to the mailbox...
+
+  if (!$new_mailbox_user->SetPerms(\@PermUsers)) {
+    die "Error setting 2K Perms\n";
+  } else {
+    print "Set 2K Perms correctly\n";
   }
   exit 1;
 }

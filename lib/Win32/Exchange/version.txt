@@ -1,5 +1,8 @@
 Version History
 ------------------------
+2002/08/26 - 0.0.0.024   Finally got a working _E2KSetPerms.  MUST HAVE EX2000SP2 (client and server) or greater!
+                         Reworked the _E55SetPerms to mimic the foreach loop for the "LetProperty"s in _E2KSetPerms
+                         -Fixed Duplicate _E2KSetAttributes
 2002/08/23 - 0.0.0.023   Changed new.  If you send a version, you don't need a name.
 2002/08/22 - 0.0.0.022a  OOPS.  I didn't roll the CreateMailbox changes.
 2002/08/22 - 0.0.0.022   Added minimal testing (mswin32new.t), hopefully excluding me from more nastygrams. :(
