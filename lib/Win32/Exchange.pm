@@ -21,14 +21,14 @@ use strict;
 use vars qw ($VERSION $Version $DEBUG);
 
 use Win32::OLE;
-Win32::OLE->Initialize(Win32::OLE::COINIT_OLEINITIALIZE);
 use Win32::Exchange::Const;
+Win32::OLE->Initialize(Win32::OLE::COINIT_OLEINITIALIZE);
 
 Win32::OLE->Option('_Unique' => 1);
 #@ISA = qw(Win32::OLE);
 
 my $Version;
-my $VERSION = $Version = "0.032";
+my $VERSION = $Version = "0.031";
 my $DEBUG = 1;
 
 
@@ -67,8 +67,7 @@ sub new {
     } else {
       $ver = $version{'ver'}
     }
-  }
-  if ($ver eq "5.5") {
+  } elsif ($ver eq "5.5") {
     #Exchange 5.5
     if ($ldap_provider = Win32::OLE->new('ADsNamespaces')) {
       return bless $ldap_provider,$class;
@@ -151,8 +150,7 @@ sub GetVersion {
     _ReportArgError("GetVersion",scalar(@_));
     return 0;
   }
-  my $original_ole_warn_value = $Win32::OLE::Warn;
-  $Win32::OLE::Warn = 0;
+ 
   my $serial_val;
   my $serial_version_check_obj = Win32::OLE->new('CDOEXM.ExchangeServer'); #substantiates the possible existance of e2k
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
@@ -163,12 +161,10 @@ sub GetVersion {
       _DebugComment("The Exchange 2000 client tools don't look to be installed on this machine\n",2);
       if (!_E55VersionInfo($server_name,$serial_val)) {
         _DebugComment("Error getting version information from Exchange 5.5\n",1);
-        $Win32::OLE::Warn = $original_ole_warn_value;
         return 0;
       }
     } else {
       _DebugComment("error: $error_num - $error_name on $server_name encountered while trying to perform GetVersion\n",1);
-      $Win32::OLE::Warn = $original_ole_warn_value;
       return 0;
     }
   } else {
@@ -178,13 +174,11 @@ sub GetVersion {
       if (!_E55VersionInfo($server_name,$serial_val)) {
         _DebugComment("Error getting version information trying the Exch 5.5 way\n",3);
         _DebugComment("Error getting version information\n",1);
-        $Win32::OLE::Warn = $original_ole_warn_value;
         return 0;
       }
     }
   }
-  $Win32::OLE::Warn = $original_ole_warn_value; 
-
+ 
   if ($serial_val =~ /Version (.*) \(Build (.*): Service Pack (.*)\)/i) {
     my %return_struct;
     $return_struct{ver}= $1;
@@ -390,16 +384,9 @@ sub _AdodbExtendedSearch {
       return 0;
   }
   $Conn->{'Provider'} = "ADsDSOObject";
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-      _DebugComment("path=$path\nfilter=$filter\ncolumns=$columns\n",2);
-      _DebugComment("Failed executing ADODB.Command for version information (E55) on $server_name -> $error_num ($error_name)\n",1);
-      return 0;
-  }
-  $Conn->{Open} = "Win32-Exchange a perl module";
+  $Conn->Open("ADs Provider");
   $Com->{ActiveConnection} = $Conn;
-  $Com->{CommandText} = $string;
-  $Com->{Properties}->{"Page Size"} = 99; #One less than the default of 100 for Exchange so we don't return an empty resultset if more than 100 results are found
-  my $RS = $Com->Execute();
+  my $RS = $Conn->Execute($string);
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
       _DebugComment("path=$path\nfilter=$filter\ncolumns=$columns\n",2);
       _DebugComment("Failed executing ADODB.Command for version information (E55) on $server_name -> $error_num ($error_name)\n",1);
@@ -409,7 +396,7 @@ sub _AdodbExtendedSearch {
   my $search_val = "";
   while ($search_val eq "") {
     if ($fuzzy != 0) {
-      _DebugComment("fuzzy=$fuzzy\n",3);
+      _DebugComment("fuzzy=$fuzzy\n",2);
       if ($RS->Fields($cols[($fuzzy - 1)])->value =~ /$server_name/i) {
         if (ref($RS->Fields($cols[($fuzzy - 1)])->value) eq "ARRAY") {
           _DebugComment("found ".@{$RS->Fields($cols[1])->value}[0]."\n",3);
@@ -417,21 +404,19 @@ sub _AdodbExtendedSearch {
           $_[$return_point] = $search_val;
           return 1;
         } else {
-          _DebugComment("not found ".$RS->Fields($cols[1])->value."\n",3);
+          _DebugComment("found ".$RS->Fields($cols[1])->value."\n",3);
           $search_val = $RS->Fields($cols[1])->value; 
           $_[$return_point] = $search_val;
           return 1;
         }
       }
     } else {
-      if (lc($server_name) eq lc($RS->Fields($cols[0])->value)) {
+      if ($server_name eq $RS->Fields($cols[0])->value) {
         if (ref($RS->Fields($cols[1])->value) eq "ARRAY") {
-          _DebugComment("found (not fuzzy) (ARRAY)".$RS->Fields($cols[1])->value."\n",3);
           $search_val = @{$RS->Fields($cols[1])->value}[0]; 
           $_[$return_point] = $search_val;
           return 1;
         } else {
-          _DebugComment("found (not fuzzy) (string)".$RS->Fields($cols[1])->value."\n",3);
           $search_val = $RS->Fields($cols[1])->value; 
           $_[$return_point] = $search_val;
           return 1;
@@ -627,14 +612,12 @@ sub CreateMailbox {
     #IPerson returns for CDO.Person (E2K)
     if ($mbx = _E2KCreateMailbox(@_)) {
       bless $provider,"Win32::Exchange";
-      bless $mbx,"Win32::Exchange";
       return $mbx;
     }
   } else {
     #nothing returns for ADsNamespaces (E5.5)
     if ($mbx = _E55CreateMailbox(@_)) {
       bless $provider,"Win32::Exchange";
-      bless $mbx,"Win32::Exchange";
       return $mbx;
     }
   }
@@ -650,8 +633,6 @@ sub _E55CreateMailbox {
   my $ou;
   my $error_num;
   my $error_name;
-  my $container = "";
-  my $recipients_path;
   if (scalar(@_) > 2) {
     $ldap_provider = $_[0];
     $information_store_server = $_[1];
@@ -663,8 +644,6 @@ sub _E55CreateMailbox {
         _DebugComment("Error Returning from GetLDAPPath\n",1);
         return 0;
       }
-    } elsif (scalar(@_) == 4) {
-      $container = $_[4];
     } elsif (scalar(@_) == 5) {
       $org = $_[3];
       $ou = $_[4];
@@ -676,22 +655,17 @@ sub _E55CreateMailbox {
     _ReportArgError("CreateMailbox [5.5] (".scalar(@_));
     return 0;
   }
-  if ($container ne "") {
-    $recipients_path = "LDAP://$information_store_server/$container";
-  } else {
-    $recipients_path = "LDAP://$information_store_server/cn=Recipients,ou=$ou,o=$org";
-  }
-  _DebugComment("path to create mailbox in: $recipients_path\n",3);
+  my $recipients_path = "LDAP://$information_store_server/cn=Recipients,ou=$ou,o=$org";
+  _DebugComment("$recipients_path\n",3);
   bless $ldap_provider,"Win32::OLE";
+  my $Recipients = $ldap_provider->GetObject("",$recipients_path);
+  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Failed opening recipients path on $information_store_server\n",1);
+    return 0;
+  }
 
   my $original_ole_warn_value = $Win32::OLE::Warn;
   $Win32::OLE::Warn = 0; #Turn STDERR warnings off because we probably are going to get an error (0x80072030)
-
-  my $Recipients = $ldap_provider->GetObject("",$recipients_path);
-  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("Failed opening recipients path ($recipients_path)\nError: $error_num ($error_name)\n",1);
-    return 0;
-  }
 
   $Recipients->GetObject("organizationalPerson", "cn=$mailbox_alias_name");
   if (!ErrorCheck("0x80072030",$error_num,$error_name)) {
@@ -783,7 +757,7 @@ sub _E2KCreateMailbox {
   _DebugComment("user_dist_name = $user_dist_name\n",3);  
  
   bless $provider,"Win32::OLE";
-  my $user_account = $provider->DataSource->Open("LDAP://$pdc/$user_dist_name",undef,adModeReadWrite);
+  my $user_account = $provider->DataSource->Open("LDAP://$pdc/$user_dist_name");
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("Failed opening NT user account for new mailbox creation on $pdc ($error_num)\n",1);
     return 0;
@@ -817,7 +791,7 @@ sub _E2KCreateMailbox {
   
   $provider->DataSource->Save();
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("Failed saving mailbox for $mailbox_alias_name ($error_num) $error_name\n",1);
+    _DebugComment("Failed saving mailbox for $mailbox_alias_name\n",1);
     return 0;
   }
   return $provider;
@@ -905,7 +879,6 @@ sub _E55GetMailbox {
   my $ou;
   my $error_num;
   my $error_name;
-  my $find_mb;
   if (scalar(@_) > 2) {
     $ldap_provider = $_[0];
     $information_store_server = $_[1];
@@ -917,8 +890,6 @@ sub _E55GetMailbox {
         _DebugComment("Error Returning from GetLDAPPath\n",1);
         return 0;
       }
-    } elsif (scalar(@_) == 4) {
-      $find_mb = $_[3];
     } elsif (scalar(@_) == 5) {
       $org = $_[3];
       $ou = $_[4];
@@ -930,19 +901,7 @@ sub _E55GetMailbox {
     _ReportArgError("GetMailbox [5.5] ",scalar(@_));
     return 0;
   }
-  my $recipients_path;
-  my $exch_mb_dn;
-  if ($find_mb == 1) {
-    if (_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$information_store_server","(objectClass=organizationalPerson)","cn,distinguishedName",1,$exch_mb_dn)) {
-      $recipients_path = "LDAP://$information_store_server/$exch_mb_dn";
-    } else {
-      _DebugComment("Error locating Exchange DL on the server.  Member addition cannot proceed.\n",1);
-      return 0;
-    }
-  } else {
-    $recipients_path = "LDAP://$information_store_server/cn=$mailbox_alias_name,cn=Recipients,ou=$ou,o=$org";
-  }
-  
+  my $recipients_path = "LDAP://$information_store_server/cn=Recipients,ou=$ou,o=$org";
   bless $ldap_provider,"Win32::OLE";
   my $Recipients = $ldap_provider->GetObject("",$recipients_path);
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
@@ -1063,7 +1022,7 @@ sub _E55SetAttributes {
   foreach my $attr (keys %attrs) {
     $mailbox->Put($attr => $attrs{$attr}); 
   }
-  $mailbox->SetInfo(); 
+  $mailbox->SetInfo;
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("error setting attribute on mailbox -> $error_num ($error_name)\n",1);
     $Win32::OLE::Warn=$original_ole_warn_value;
@@ -1547,7 +1506,6 @@ sub _E55AddDLMembers {
   my @new_members;
   my $ou;
   my $org;
-  my $find_dl;
   if (scalar(@_) > 3) {
     $ldap_provider = $_[0];
     $server_name=$_[1];
@@ -1557,19 +1515,16 @@ sub _E55AddDLMembers {
       return 0;
     }
     @new_members=@{$_[3]};
-    if (scalar(@_) < 6) {
+    if (scalar(@_) == 4) {
       if ($ldap_provider->GetLDAPPath($server_name,$org,$ou)) {
         _DebugComment("returned -> o=$org,ou=$ou\n",3);
       } else {
         _DebugComment("Error Returning from GetLDAPPath\n",1);
         return 0;
       }
-      if (scalar(@_) == 5) {
-        $find_dl = $_[4];
-      }
     } elsif (scalar(@_) == 6) {
-      $org = $_[4];
-      $ou = $_[5];
+      $org = $_[3];
+      $ou = $_[4];
     } else {
       _ReportArgError("AddDLMembers [5.5]",scalar(@_));
       return 0;
@@ -1583,30 +1538,7 @@ sub _E55AddDLMembers {
   my $original_ole_warn_value = $Win32::OLE::Warn;
 
   bless $ldap_provider,"Win32::OLE";
-  my $exch_dl_dn;
-  my $exch_dl_path;
-  my $temp_dl_path;
-  my $exch_dl;
-  if ($exch_dl_name =~ /^cn=.*ou=.*o=.*/) {
-    #a dn was sent
-    $exch_dl_path = "LDAP://$server_name/$exch_dl_name";
-    $exch_dl_dn = $exch_dl_name;
-  } else {
-    if ($find_dl == 1) {
-      if (_AdodbExtendedSearch($exch_dl_name,"LDAP://$server_name","(objectClass=groupOfNames)","cn,distinguishedName",$exch_dl_dn)) {
-        $exch_dl_path = "LDAP://$server_name/$exch_dl_dn";
-      } else {
-        _DebugComment("Error locating Exchange DL on the server.  Member addition cannot proceed.\n",1);
-        return 0;
-      }
-    } else {
-      #an alias was sent (name only, check default container)
-      $exch_dl_path = "LDAP://$server_name/cn=$exch_dl_name,cn=Distribution Lists,ou=$ou,o=$org";
-      $exch_dl_dn = "cn=$exch_dl_name,cn=Distribution Lists,ou=$ou,o=$org";
-    }
-  }
-  $exch_dl = $ldap_provider->GetObject("",$exch_dl_path);
-
+  my $exch_dl = $ldap_provider->GetObject("","LDAP://$server_name/cn=$exch_dl_name,cn=Distribution Lists,ou=$ou,o=$org");
   my $error_num;
   my $error_name;
   if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
@@ -1629,31 +1561,17 @@ sub _E55AddDLMembers {
       _DebugComment("      -0 members exists\n",3);
     }
   }
-  my $exch_mb_dn;
   foreach my $username (@new_members) {
-    _DebugComment("      -Adding $username to Distribution List: $exch_dl_name\n",2);
-    if ($username =~ /^cn=.*ou=.*o=.*$/) {
-      $exch_mb_dn = $username;
-    } else {
-      if ($find_dl == 1) {
-        if (!_AdodbExtendedSearch($username,"LDAP://$server_name","(objectClass=organizationalPerson)","rdn,distinguishedName",$exch_mb_dn)) {
-          _DebugComment("Error locating Exchange mailbox on the server.  Member addition cannot proceed.\n",1);
-          return 0;
-        }
-      } else {
-        $exch_mb_dn = "cn=$username,cn=Recipients,ou=$ou,o=$org";
-      }
-    }
+    _DebugComment("      -Adding $username to Distribution List: $exch_dl_name\n",3);
     my $duplicate;
     foreach my $dup (@$exch_members) {
-      if (lc($dup) eq lc($exch_mb_dn)) {
-        _DebugComment("Error adding user ($username) to distribution list [they are already a member]\n",1);
+      if (lc($dup) =~ lc("cn=$username,cn=Recipients,ou=$ou,o=$org")) {
         $duplicate = 1;
         last;
       }
     }
     if ($duplicate != 1) {
-      push (@$exch_members, $exch_mb_dn);
+      push (@$exch_members, "cn=$username,cn=Recipients,ou=$ou,o=$org");
     }
   }
   $exch_dl->Put('member', $exch_members);

@@ -1,10 +1,1 @@
-It's possible that some of the ADODB searches could fail
-if they return more than 100 results (with the exception of
-_ADODBExtendedSearch), because of limitations on your Exchange
-server, the programming fix is to make a "paged search", that requests
-blocks of data smaller than the maximum search size (default is 100)
-and return the result set in its entirety while staying within the limits
-set forth by your Exchange server (E55).
-
-A paged search was created in _ADODBExtendedSearch as a testing measure, and
-eventually all the ADODB searches will be changed so that they "page".
+No known bugs.
