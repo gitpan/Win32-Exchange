@@ -1,8 +1,5 @@
 Version History
 ------------------------
-2002/08/27 -     0.026   -Added Distribution Lists for E2K WITH A PASSION!
-                         -reworked a lot of the blesses (to wait to bless until returning from "SetPerms","CreateMaibox", etc.)
-                         -made minor changes to _Errorcheck..  don't pass Win32::OLE->LastError() anymore.. (it looks at is itself)
 2002/08/26 -     0.025   Re-implemented _E2KGetMailbox (for reasons stated in 0.024)
                          Revised versioning scheme to pull out the 0.0 and just go with 0.025
                          Found a need to handle internal error-checking (Win32::Exchange->LastError())

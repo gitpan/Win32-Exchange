@@ -1,9 +1,11 @@
 Work on
+  2K distlist addition...
   2k/5.5 proxyaddress editing/overwriting
        -throw in a
              -1 for overwrite, and a
              -0 for update 
   2k/5/5 mailbox deletion
+  2k distlist member addition
   2k/5.5 distlist addition
   2k/5.5 distlist deletion
   LastError()

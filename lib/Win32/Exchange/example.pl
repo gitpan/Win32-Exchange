@@ -150,12 +150,5 @@ if ($ver{ver} eq "5.5") {
   } else {
     print "Set 2K Perms correctly\n";
   }
-  my @new_dl_members;
-  push (@new_dl_members,$mailbox_alias_name);
-  if ($provider->AddDLMembers("_homelist",\@new_dl_members)) {
-    print "Add successful to DL\n";
-  } else {
-    die "Error adding distlist member\n";
-  }
   exit 1;
 }
