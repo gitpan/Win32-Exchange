@@ -57,7 +57,7 @@ if ($ver{ver} eq "5.5") {
   #$rfax="RFAX:$Exchange_Info{'cn'}\@"; #this can set the Rightfax SMTP name for Exchange-enabled Rightfax mail delivery
   #push (@$Other_MBX,$rfax);
 
-  $smtp="smtp:another_name_to_send_to\@$mail_domain"; 
+  $smtp="smtp:another_name_to_send_to\@insight.com"; 
   push (@$Other_MBX,$smtp);
   #be careful with 'otherMailbox'es..  You are deleting any addresses that may exist already
   #if you set them via 'otherMailbox' and don't get them first (you are now forewarned).
@@ -98,18 +98,24 @@ if ($ver{ver} eq "5.5") {
     print "located store distinguished name= $store_name\n";
     print "$info_store_server\n";
     print "  Total:\n";
-    print "    storage groups = @counts[0]\n";
-    print "    mailbox stores = @counts[1]\n";
+    print "    storage groups = $counts[0]\n";
+    print "    mailbox stores = $counts[1]\n";
   }
-  if ($new_mailbox_user = $provider->CreateMailbox($info_store_server,
-                                              $pdc,
-                                              $mailbox_alias_name,
-                                              "insight.com"
-                                             )
-     ) {
-    print "Mailbox create succeeded\n";
+  if ($mailbox = $provider->GetMailbox($pdc,$mailbox_alias_name)) {
+    print "Got Mailbox successfully\n";
   } else {
-    die "Failure is the option that you have selected!\n";
+    print "Mailbox did not exist\n";
+    if ($mailbox = $provider->CreateMailbox($info_store_server,
+                                            $pdc,
+                                            $mailbox_alias_name,
+                                            "insight.com"
+                                           )
+       ) {
+      print "Mailbox create succeeded\n";
+    } else {
+      die "Failure is the option that you have selected!\n";
+    }
+    
   }
   #be careful with proxy addresses..  You are deleting any addresses that may exist already
   #if you set them via ProxyAddresses (you are now forewarned).
@@ -129,7 +135,7 @@ if ($ver{ver} eq "5.5") {
   $Attributes{"IMailboxStore"}{StoreQuota} = 100; #at 100KB starts getting warnings
   $Attributes{"IMailboxStore"}{OverQuotaLimit} = 120; #at 120KB can't send...  I THINK...
   $Attributes{"IMailboxStore"}{HardLimit} = 130; #at 130KB, can't do anything...  I THINK...
-  if (!$new_mailbox_user->SetAttributes(\%Attributes)) {
+  if (!$mailbox->SetAttributes(\%Attributes)) {
     die "Error setting 2K Attributes\n";
   } else {
     print "Set Attributes correctly\n";
@@ -139,10 +145,17 @@ if ($ver{ver} eq "5.5") {
   push (@PermUsers,"$domain\\$mailbox_alias_name");
   push (@PermUsers,"$domain\\Exchange Perms Admin"); #Group that needs perms to the mailbox...
 
-  if (!$new_mailbox_user->SetPerms(\@PermUsers)) {
+  if (!$mailbox->SetPerms(\@PermUsers)) {
     die "Error setting 2K Perms\n";
   } else {
     print "Set 2K Perms correctly\n";
+  }
+  my @new_dl_members;
+  push (@new_dl_members,$mailbox_alias_name);
+  if ($provider->AddDLMembers("_homelist",\@new_dl_members)) {
+    print "Add successful to DL\n";
+  } else {
+    die "Error adding distlist member\n";
   }
   exit 1;
 }

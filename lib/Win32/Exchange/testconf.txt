@@ -31,6 +31,8 @@ to get you to use Windows 2000 clients.
 ***  No part of this module was tested on an NT4 Domain, or with NT4 clients connecting
      to Exchange 5.5 or 2000 mailboxes.
        -I don't have any NT4 Domains, or NT4 clients lying around to test on right now. :(
-          -The Exchange 5.5 methods should work fine in this case (with the exceptions noted
-           in the readme.txt).    
+          -The Exchange 5.5 methods should work fine (with the exceptions noted
+           in the readme.txt).
+          -The Exchange 2000 methods should work fine (with the exceptions noted
+           in the readme.txt).
 
