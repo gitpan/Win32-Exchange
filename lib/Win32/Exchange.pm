@@ -30,7 +30,7 @@ Win32::OLE->Option('_Unique' => 1);
 #@ISA = qw(Win32::OLE);
 
 my $Version;
-my $VERSION = $Version = "0.041";
+my $VERSION = $Version = "0.042";
 my $DEBUG = 2;
 
 sub new {
@@ -730,10 +730,10 @@ sub ErrorCheck {
   my $error_num;
   my $error_name;
   my $last_ole_error = Win32::OLE->LastError();
-  $error_num = sprintf ("0x%08x",$last_ole_error);
+  $error_num = sprintf "0x%lx",$last_ole_error;
   my @error_list = split(/\"/,$last_ole_error,3);
   $error_name = $error_list[1];
-  if ($error_num ne $last_error_expected) {
+  if (lc($error_num) ne lc($last_error_expected)) {
     $_[1] = $error_num;
     $_[2] = $error_name;
     return 0;

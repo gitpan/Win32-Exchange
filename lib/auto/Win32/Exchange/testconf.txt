@@ -1,14 +1,20 @@
 Testing configurations
 ----------------------
 
+This module was tested on a Windows 2003 Server contacting an Exchange 5.5, 2000 and 2003 Server
+  -They were both connected to a Windows 2003 Mixed Mode NT Domain (same domain).
+  -The client Windows 2003 Server had the Exchange System Manager and Exchange 5.5
+   Administrator loaded (The Exchange 5.5 Admin program is optional).
+    -This is necessary to load the underlying Classes and DLLs for making these manipulations.
+------------------------------------------------------------------------------------------
 This module was tested on a Windows 2000 Server, contacting an Exchange 2000 Server.
-  -They were both connected to a Windows 2000 Native Mode Domain (same domain).
+  -They were both connected to a Windows 2000 Native Mode NT Domain (same domain).
   -The client Windows 2000 Server had the Exchange System Manager and Exchange 5.5
    Administrator loaded (The Exchange 5.5 Admin program is optional).
     -This is necessary to load the underlying Classes and DLLs for making these manipulations.
 ------------------------------------------------------------------------------------------
 This module was also tested on a Windows 2000 Server, contacting an Exchange 5.5 Server.
-  -They were both connected to a Windows 2000 Native Mode Domain.
+  -They were both connected to a Windows 2000 Native Mode NT Domain.
   -The client Windows 2000 Server had:
       -the Exchange 5.5 Administrator loaded,
       -ADsSecurity.dll registered (from the ADSI SDK).

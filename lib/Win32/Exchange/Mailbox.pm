@@ -28,7 +28,7 @@ Win32::OLE->Option('_Unique' => 1);
 #@ISA = qw(Win32::OLE);
 
 my $Version;
-my $VERSION = $Version = "0.045";
+my $VERSION = $Version = "0.046";
 my $DEBUG = 1;
 
 sub new {
@@ -572,7 +572,7 @@ sub _E2KGetMailbox {
     return 0;
   }
   #this next part may be prone to issues if you are a native-mode Exchange install.
-  if (!$provider->_E2KIsMapiAware($mailbox_alias_name)) {
+  if (!$provider->_E2KIsMailAware($mailbox_alias_name)) {
     _DebugComment("Error performing GetMailbox: user is not MAPI aware ($error_num)\n",2);
     return 0;
   } else {
@@ -1400,7 +1400,7 @@ sub _E2KMailEnable {
   
   my $dn = $user_obj->{ADsPath};
   my $dc = $provider->{dc};
-  if (_E2KIsMapiAware($dc,$user_obj->{samaccountname})) {
+  if (_E2KIsMailAware($dc,$user_obj->{samaccountname})) {
     _DebugComment("user account is already MAPI aware.  Cannot proceed with MailEnable (E2K)\n",0);
     return 0;  
   }
@@ -1533,6 +1533,90 @@ sub _E2KMailDisable {
 sub _E55MailDisable {
   #sorry, no function yet.
   return 0;
+}
+
+sub MoveMailbox {
+  my $mbx;
+  my $provider;
+  $provider = \%{$_[0]} ;
+  if ($provider->{version} =~ /^6\./) {
+    if ($mbx = _E2KMoveMailbox(@_)) {
+      return $mbx;
+    }
+  } else {
+    _DebugComment("Sorry, there's no Exchange 5.5 version of this call (MoveMailbox).  Try using EXMERGE.\n",0);
+    return 0;
+  }
+  return 0;
+}
+
+sub _E2KMoveMailbox {
+  my $provider;
+  my $mailbox_alias_name;
+  my $move_to_server;
+  my $move_to_sg;
+  my $move_to_ms;
+  my $error_num;
+  my $error_name;
+  my $dc;
+  my $cdo_provider;
+  if (scalar(@_) == 5) {
+    $provider = \%{$_[0]} ;
+    $cdo_provider = $provider->{cdo_provider};
+    $dc = $provider->{dc};
+    $mailbox_alias_name = $_[1];
+    $move_to_server = $_[2];
+    $move_to_sg = $_[3];
+    $move_to_ms = $_[4];
+  } else {
+    _ReportArgError("MoveMailbox [E2K]",scalar(@_));
+    return 0;
+  }
+  my $store_dn;
+  if (Win32::Exchange::LocateMailboxStore($move_to_server,$move_to_sg,$move_to_ms,$store_dn)) {
+    _DebugComment("Success finding MB Store at $store_dn\n",3);
+  } else {
+    _DebugComment("Failed finding MB Store for $move_to_ms (message store) and $move_to_sg (storage_group)\n",1);
+    return 0;
+  }
+  my $user_dn;
+  if (!Win32::Exchange::_AdodbExtendedSearch($mailbox_alias_name,"LDAP://$dc","(samAccountName=$mailbox_alias_name)","samAccountName,distinguishedName",$user_dn)) {
+    _DebugComment("Error querying user mailbox in MoveMailbox (E2K)\n",1);
+    return 0;
+  }
+  my $objMailbox = $cdo_provider;
+  $objMailbox->{DataSource}->Open("LDAP://".$user_dn,undef,adModeReadWrite);
+  if (!Win32::Exchange::Mailbox::ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error Opening mailbox for user ($mailbox_alias_name) in MoveMailbox (E2K)\n",1);
+    return 0;
+  }
+  my $info_store = $objMailbox->GetInterface("IMailboxStore");
+  if (!Win32::Exchange::Mailbox::ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error using GetInterface for $mailbox_alias_name in MoveMailbox (E2K)\n",1);
+    return 0;
+  }
+  if ($info_store->{homeMDB} eq "") {
+    _DebugComment ("This user has no mailbox (homeMDB is empty).\n",2);
+    return 0;
+  }
+  if (lc("LDAP://".$info_store->{homeMDB}) eq lc($store_dn)) {
+    _DebugComment ("Mailbox paths for source and destination are identical (nothing to move) in MoveMailbox (E2K).\n",2);
+    return 0;
+  }
+  $info_store->MoveMailbox($store_dn);
+  if (!Win32::Exchange::Mailbox::ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error Moving mailbox for user ($mailbox_alias_name) in MoveMailbox (E2K)\n",1);
+    return 0;
+  }
+  
+  $objMailbox->{DataSource}->Save();
+  if (!Win32::Exchange::Mailbox::ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error Saving changes for for user ($mailbox_alias_name) in MoveMailbox (E2K)\n",1);
+    return 0;
+  } else {
+    _DebugComment ("Mailbox has been moved to " . $move_to_ms . " successfully.\n",4);
+    return 1;
+  }
 }
 
 sub AddDLMembers {

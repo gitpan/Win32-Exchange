@@ -47,6 +47,7 @@
             <LI><A HREF="#function_IsMailEnabled">IsMailEnabled</A></LI>
             <LI><A HREF="#function_MailDisable">MailDisable</A></LI>
             <LI><A HREF="#function_MailEnable">MailEnable</A></LI>
+            <LI><A HREF="#function_MoveMailbox">MoveMailbox</A></LI>
             <LI><A HREF="#function_SetAttributes">SetAttributes</A></LI>
             <LI><A HREF="#function_SetPerms">SetPerms</A></LI>
           </UL>
@@ -361,6 +362,18 @@ if ($user_obj->MailEnable("pcgeek@bigfoot.com") {<BR>
   print "Success!";<BR>
 }<BR>
 <BR>
+<BR>
+<A NAME="function_MoveMailbox">
+<DT><STRONG><A NAME="function_MoveMailbox"></A></STRONG>
+<DT><STRONG><A NAME="function_E2KMoveMailbox">$provider-&gt;<CODE>MoveMailbox($mailbox_alias_name,$move_to_server,$move_to_message_store,$move_to_storage_group);#E2K only</CODE></A></STRONG><BR>
+<DD>
+This funcion uses Exchange 2000/2003's MoveMailbox functionality.  Sorry, Exchange 5.5 Admins, you still need to use EXMERGE to complete this task.<BR>
+<BR>
+if ($provider->MoveMailbox("someone","EXCHANGE1","First Mailbox Store","First Storage Group")) {<BR>
+  print "Success moving someone's mailbox!\n";<BR>
+} else {<BR>
+  print "Failed moving someone's mailbox\n";<BR>
+}<BR>
 <BR>
 <DT><A NAME="function_SetAttributes"></A>
 <DT><STRONG><A NAME="function__E55SetAttributes">$mailbox-&gt;<CODE>SetAttributes(\%attrs);Exchange 5.5</CODE></A></STRONG><BR>
@@ -732,7 +745,7 @@ I'd like to extend thanks to the following:<BR>
 <P>Please send questions, comments or suggestions about this module to Steven Manross &lt;<A HREF="mailto:steven@manross.net">steven@manross.net</A>&gt.</P>
 <HR>
 <H1><A NAME="version">VERSION</A></H1>
-<P>Version 0.045     April 26, 2004</P>
+<P>Version 0.046     June 8, 2004</P>
 <H1><A NAME="copyright">Copyright</A></H1>
 Microsoft, Active Directory, ADSI, Windows, Windows NT, MSDN, and Exchange are either registered trademarks or trademarks of Microsoft Corporation in the United States and/or other countries.<BR>
 <BR>

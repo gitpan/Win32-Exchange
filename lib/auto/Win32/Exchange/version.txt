@@ -1,5 +1,14 @@
 Version History
 ------------------------
+2004/06/09 -     0.046   -Modified ErrorCheck to check LastError's hex value instead of parsing LastError's string for the info.
+                             -I'm sure that it could one day bite me for something. :)
+                         -Added MoveMailbox (E2K/03 only).
+
+                            --Win32::Exchange ver 0.042
+                            --Win32::Exchange::Mailbox ver 0.046
+                            --Win32::Exchange::Const
+                            --Win32::Exchange::SMTP::Security ver 0.003
+
 2004/04/22 -     0.045   -Corrected AddDLMembers for E55 in the uid for the dlname and the mailbox name for the ADODB search.
                          -Hard-coded $find_dl = 1
                          -WooHoo, I have an E55 test server again!
