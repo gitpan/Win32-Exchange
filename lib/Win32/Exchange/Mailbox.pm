@@ -1586,12 +1586,12 @@ sub _E2KMoveMailbox {
   }
   my $objMailbox = $cdo_provider;
   $objMailbox->{DataSource}->Open("LDAP://".$user_dn,undef,adModeReadWrite);
-  if (!Win32::Exchange::Mailbox::ErrorCheck("0x00000000",$error_num,$error_name)) {
+  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("Error Opening mailbox for user ($mailbox_alias_name) in MoveMailbox (E2K)\n",1);
     return 0;
   }
   my $info_store = $objMailbox->GetInterface("IMailboxStore");
-  if (!Win32::Exchange::Mailbox::ErrorCheck("0x00000000",$error_num,$error_name)) {
+  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("Error using GetInterface for $mailbox_alias_name in MoveMailbox (E2K)\n",1);
     return 0;
   }
@@ -1604,13 +1604,18 @@ sub _E2KMoveMailbox {
     return 0;
   }
   $info_store->MoveMailbox($store_dn);
-  if (!Win32::Exchange::Mailbox::ErrorCheck("0x00000000",$error_num,$error_name)) {
-    _DebugComment("Error Moving mailbox for user ($mailbox_alias_name) in MoveMailbox (E2K)\n",1);
+  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
+    _DebugComment("Error Moving mailbox for user ($mailbox_alias_name) in MoveMailbox (E2K) -- $error_num\n",1);
+    if (ErrorCheck("0x8000ffff",$error_num,$error_name)) {
+      _DebugComment("This error usually has to do with a newly created user -- MoveMailbox (E2K)\n",1);
+      _DebugComment("  -Waiting for replication to complete can correct this issue\n",1);
+      _DebugComment("  -Mailboxes that have never logged into can also cause this error\n",1);
+    }
     return 0;
   }
   
   $objMailbox->{DataSource}->Save();
-  if (!Win32::Exchange::Mailbox::ErrorCheck("0x00000000",$error_num,$error_name)) {
+  if (!ErrorCheck("0x00000000",$error_num,$error_name)) {
     _DebugComment("Error Saving changes for for user ($mailbox_alias_name) in MoveMailbox (E2K)\n",1);
     return 0;
   } else {

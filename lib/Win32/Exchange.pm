@@ -730,7 +730,10 @@ sub ErrorCheck {
   my $error_num;
   my $error_name;
   my $last_ole_error = Win32::OLE->LastError();
-  $error_num = sprintf "0x%lx",$last_ole_error;
+  $error_num = sprintf "0x%lx",Win32::OLE->LastError();
+  if ($error_num eq "0x0") {
+    $error_num = "0x00000000"
+  }
   my @error_list = split(/\"/,$last_ole_error,3);
   $error_name = $error_list[1];
   if (lc($error_num) ne lc($last_error_expected)) {
